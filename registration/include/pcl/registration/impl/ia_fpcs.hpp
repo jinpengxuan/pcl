@@ -41,6 +41,7 @@
 #include <pcl/registration/ia_fpcs.h>
 #include <pcl/common/time.h>
 #include <pcl/common/distances.h>
+#include <pcl/common/utils.h>
 #include <pcl/sample_consensus/sac_model_plane.h>
 #include <pcl/registration/transformation_estimation_3point.h>
 
@@ -59,16 +60,17 @@ pcl::getMeanPointDensity (const typename pcl::PointCloud<PointT>::ConstPtr &clou
   std::vector <int> ids (2);
   std::vector <float> dists_sqr (2);
 
-#ifdef _OPENMP
+  pcl::utils::ignore(nr_threads);
 #pragma omp parallel for \
-  reduction (+:mean_dist, num) \
-  private (ids, dists_sqr) shared (tree, cloud) \
-  default (none)num_threads (nr_threads)
-#endif
-
+  default(none) \
+  shared(tree, cloud) \
+  firstprivate(ids, dists_sqr) \
+  reduction(+:mean_dist, num) \
+  firstprivate(s, max_dist_sqr) \
+  num_threads(nr_threads)
   for (int i = 0; i < 1000; i++)
   {
-    tree.nearestKSearch (cloud->points[rand () % s], 2, ids, dists_sqr);
+    tree.nearestKSearch ((*cloud)[rand () % s], 2, ids, dists_sqr);
     if (dists_sqr[1] < max_dist_sqr)
     {
       mean_dist += std::sqrt (dists_sqr[1]);
@@ -96,16 +98,25 @@ pcl::getMeanPointDensity (const typename pcl::PointCloud<PointT>::ConstPtr &clou
   std::vector <int> ids (2);
   std::vector <float> dists_sqr (2);
 
-#ifdef _OPENMP
+  pcl::utils::ignore(nr_threads);
+#if OPENMP_LEGACY_CONST_DATA_SHARING_RULE
 #pragma omp parallel for \
-  reduction (+:mean_dist, num) \
-  private (ids, dists_sqr) shared (tree, cloud, indices)    \
-  default (none)num_threads (nr_threads)
+  default(none) \
+  shared(tree, cloud, indices) \
+  firstprivate(ids, dists_sqr) \
+  reduction(+:mean_dist, num) \
+  num_threads(nr_threads)
+#else
+#pragma omp parallel for \
+  default(none) \
+  shared(tree, cloud, indices, s, max_dist_sqr) \
+  firstprivate(ids, dists_sqr) \
+  reduction(+:mean_dist, num) \
+  num_threads(nr_threads)
 #endif
-
   for (int i = 0; i < 1000; i++)
   {
-    tree.nearestKSearch (cloud->points[indices[rand () % s]], 2, ids, dists_sqr);
+    tree.nearestKSearch ((*cloud)[indices[rand () % s]], 2, ids, dists_sqr);
     if (dists_sqr[1] < max_dist_sqr)
     {
       mean_dist += std::sqrt (dists_sqr[1]);
@@ -162,32 +173,30 @@ pcl::registration::FPCSInitialAlignment <PointSource, PointTarget, NormalT, Scal
   std::vector <MatchingCandidates> all_candidates (max_iterations_);
   pcl::StopWatch timer;
 
-  #ifdef _OPENMP
-  #pragma omp parallel num_threads (nr_threads_)
-  #endif
+  #pragma omp parallel \
+    default(none) \
+    shared(abort, all_candidates, timer) \
+    num_threads(nr_threads_)
   {
     #ifdef _OPENMP
     std::srand (static_cast <unsigned int> (std::time (NULL)) ^ omp_get_thread_num ());    
-    #pragma omp for schedule (dynamic)
+    #pragma omp for schedule(dynamic)
     #endif
     for (int i = 0; i < max_iterations_; i++)
     {
-
-      #ifdef _OPENMP
       #pragma omp flush (abort)
-      #endif
 
       MatchingCandidates candidates (1);
       std::vector <int> base_indices (4);
-      float ratio[2];
       all_candidates[i] = candidates;
 
       if (!abort)
       {
+        float ratio[2];
         // select four coplanar point base
         if (selectBase (base_indices, ratio) == 0)
         {
-          // calculate candidate pair correspondences using diagonal lenghts of base
+          // calculate candidate pair correspondences using diagonal lengths of base
           pcl::Correspondences pairs_a, pairs_b;
           if (bruteForceCorrespondences (base_indices[0], base_indices[1], pairs_a) == 0 &&
             bruteForceCorrespondences (base_indices[2], base_indices[3], pairs_b) == 0)
@@ -198,26 +207,24 @@ pcl::registration::FPCSInitialAlignment <PointSource, PointTarget, NormalT, Scal
             {
               // check and evaluate candidate matches and store them
               handleMatches (base_indices, matches, candidates);
-              if (candidates.size () != 0)
+              if (!candidates.empty ())
                 all_candidates[i] = candidates;
             }
           }
         }
 
         // check terminate early (time or fitness_score threshold reached)
-        abort = (candidates.size () > 0 ? candidates[0].fitness_score < score_threshold_ : abort);
+        abort = (!candidates.empty () ? candidates[0].fitness_score < score_threshold_ : abort);
         abort = (abort ? abort : timer.getTimeSeconds () > max_runtime_);
 
 
-        #ifdef _OPENMP
         #pragma omp flush (abort)
-        #endif
       }
     }
   }
   
 
-  // determine best match over all trys
+  // determine best match over all tries
   finalCompute (all_candidates);
 
   // apply the final transformation
@@ -231,7 +238,7 @@ pcl::registration::FPCSInitialAlignment <PointSource, PointTarget, NormalT, Scal
 template <typename PointSource, typename PointTarget, typename NormalT, typename Scalar> bool
 pcl::registration::FPCSInitialAlignment <PointSource, PointTarget, NormalT, Scalar>::initCompute ()
 {
-  std::srand (static_cast <unsigned int> (std::time (NULL)));
+  std::srand (static_cast <unsigned int> (std::time (nullptr)));
 
   // basic pcl initialization
   if (!pcl::PCLBase <PointSource>::initCompute ())
@@ -244,12 +251,12 @@ pcl::registration::FPCSInitialAlignment <PointSource, PointTarget, NormalT, Scal
     return (false);
   }
 
-  if (!target_indices_ || target_indices_->size () == 0)
+  if (!target_indices_ || target_indices_->empty ())
   {
     target_indices_.reset (new std::vector <int> (static_cast <int> (target_->size ())));
     int index = 0;
-    for (std::vector <int>::iterator it = target_indices_->begin (), it_e = target_indices_->end (); it != it_e; it++)
-      *it = index++;
+    for (int &target_index : *target_indices_)
+      target_index = index++;
     target_cloud_updated_ = true;
   }
 
@@ -298,7 +305,7 @@ pcl::registration::FPCSInitialAlignment <PointSource, PointTarget, NormalT, Scal
     delta_ *= mean_dist;
   }
 
-  // heuristic determination of number of trials to have high probabilty of finding a good solution
+  // heuristic determination of number of trials to have high probability of finding a good solution
   if (max_iterations_ == 0)
   {
     float first_est = std::log (small_error_) / std::log (1.0 - std::pow ((double) approx_overlap_, (double) min_iterations));
@@ -343,7 +350,7 @@ pcl::registration::FPCSInitialAlignment <PointSource, PointTarget, NormalT, Scal
   Eigen::Vector4f centre_pt;
   float nearest_to_plane = FLT_MAX;
 
-  // repeat base search until valid quadruple was found or ransac_iterations_ number of trys were unsuccessfull
+  // repeat base search until valid quadruple was found or ransac_iterations_ number of tries were unsuccessful
   for (int i = 0; i < ransac_iterations_; i++)
   {
     // random select an appropriate point triple
@@ -355,13 +362,13 @@ pcl::registration::FPCSInitialAlignment <PointSource, PointTarget, NormalT, Scal
     pcl::compute3DCentroid (*target_, base_triple, centre_pt);
 
     // loop over all points in source cloud to find most suitable fourth point
-    const PointTarget *pt1 = &(target_->points[base_indices[0]]);
-    const PointTarget *pt2 = &(target_->points[base_indices[1]]);
-    const PointTarget *pt3 = &(target_->points[base_indices[2]]);
+    const PointTarget *pt1 = &((*target_)[base_indices[0]]);
+    const PointTarget *pt2 = &((*target_)[base_indices[1]]);
+    const PointTarget *pt3 = &((*target_)[base_indices[2]]);
 
-    for (std::vector <int>::iterator it = target_indices_->begin (), it_e = target_indices_->end (); it != it_e; it++)
+    for (const int &target_index : *target_indices_)
     {
-      const PointTarget *pt4 = &(target_->points[*it]);
+      const PointTarget *pt4 = &((*target_)[target_index]);
 
       float d1 = pcl::squaredEuclideanDistance (*pt4, *pt1);
       float d2 = pcl::squaredEuclideanDistance (*pt4, *pt2);
@@ -377,12 +384,12 @@ pcl::registration::FPCSInitialAlignment <PointSource, PointTarget, NormalT, Scal
       float dist_to_plane = pcl::pointToPlaneDistance (*pt4, coefficients);
       if (dist_to_plane < nearest_to_plane)
       {
-        base_indices[3] = *it;
+        base_indices[3] = target_index;
         nearest_to_plane = dist_to_plane;
       }
     }
 
-    // check if at least one point fullfilled the conditions
+    // check if at least one point fulfilled the conditions
     if (nearest_to_plane != FLT_MAX)
     {
       // order points to build largest quadrangle and calcuate intersection ratios of diagonals
@@ -391,7 +398,7 @@ pcl::registration::FPCSInitialAlignment <PointSource, PointTarget, NormalT, Scal
     }
   }
 
-  // return unsuccessfull if no quadruple was selected
+  // return unsuccessful if no quadruple was selected
   return (-1);
 }
 
@@ -413,8 +420,8 @@ pcl::registration::FPCSInitialAlignment <PointSource, PointTarget, NormalT, Scal
     int *index2 = &(*target_indices_)[rand () % nr_points];
     int *index3 = &(*target_indices_)[rand () % nr_points];
 
-    Eigen::Vector3f u = target_->points[*index2].getVector3fMap () - target_->points[*index1].getVector3fMap ();
-    Eigen::Vector3f v = target_->points[*index3].getVector3fMap () - target_->points[*index1].getVector3fMap ();
+    Eigen::Vector3f u = (*target_)[*index2].getVector3fMap () - (*target_)[*index1].getVector3fMap ();
+    Eigen::Vector3f v = (*target_)[*index3].getVector3fMap () - (*target_)[*index1].getVector3fMap ();
     float t = u.cross (v).squaredNorm (); // triangle area (0.5 * sqrt(t)) should be maximal
 
     // check for most suitable point triple
@@ -442,20 +449,20 @@ pcl::registration::FPCSInitialAlignment <PointSource, PointTarget, NormalT, Scal
   std::vector <int> temp (base_indices.begin (), base_indices.end ());
 
   // loop over all combinations of base points
-  for (std::vector <int>::const_iterator i = copy.begin (), i_e = copy.end (); i != i_e; i++)
-  for (std::vector <int>::const_iterator j = copy.begin (), j_e = copy.end (); j != j_e; j++)
+  for (std::vector <int>::const_iterator i = copy.begin (), i_e = copy.end (); i != i_e; ++i)
+  for (std::vector <int>::const_iterator j = copy.begin (), j_e = copy.end (); j != j_e; ++j)
   {
     if (i == j)
       continue;
 
-    for (std::vector <int>::const_iterator k = copy.begin (), k_e = copy.end (); k != k_e; k++)
+    for (std::vector <int>::const_iterator k = copy.begin (), k_e = copy.end (); k != k_e; ++k)
     {
       if (k == j || k == i)
         continue;
 
       std::vector <int>::const_iterator l = copy.begin ();
       while (l == i || l == j || l == k)
-        l++;
+        ++l;
 
       temp[0] = *i;
       temp[1] = *j;
@@ -484,9 +491,9 @@ pcl::registration::FPCSInitialAlignment <PointSource, PointTarget, NormalT, Scal
   float (&ratio)[2])
 {
   // get point vectors
-  Eigen::Vector3f u = target_->points[base_indices[1]].getVector3fMap () - target_->points[base_indices[0]].getVector3fMap ();
-  Eigen::Vector3f v = target_->points[base_indices[3]].getVector3fMap () - target_->points[base_indices[2]].getVector3fMap ();
-  Eigen::Vector3f w = target_->points[base_indices[0]].getVector3fMap () - target_->points[base_indices[2]].getVector3fMap ();
+  Eigen::Vector3f u = (*target_)[base_indices[1]].getVector3fMap () - (*target_)[base_indices[0]].getVector3fMap ();
+  Eigen::Vector3f v = (*target_)[base_indices[3]].getVector3fMap () - (*target_)[base_indices[2]].getVector3fMap ();
+  Eigen::Vector3f w = (*target_)[base_indices[0]].getVector3fMap () - (*target_)[base_indices[2]].getVector3fMap ();
 
   // calculate segment distances
   float a = u.dot (u);
@@ -578,16 +585,16 @@ pcl::registration::FPCSInitialAlignment <PointSource, PointTarget, NormalT, Scal
   const float max_norm_diff = 0.5f * max_norm_diff_ * M_PI / 180.f;
 
   // calculate reference segment distance and normal angle
-  float ref_dist = pcl::euclideanDistance (target_->points[idx1], target_->points[idx2]);
-  float ref_norm_angle = (use_normals_ ? (target_normals_->points[idx1].getNormalVector3fMap () -
-                                          target_normals_->points[idx2].getNormalVector3fMap ()).norm () : 0.f);
+  float ref_dist = pcl::euclideanDistance ((*target_)[idx1], (*target_)[idx2]);
+  float ref_norm_angle = (use_normals_ ? ((*target_normals_)[idx1].getNormalVector3fMap () -
+                                          (*target_normals_)[idx2].getNormalVector3fMap ()).norm () : 0.f);
 
   // loop over all pairs of points in source point cloud
-  std::vector <int>::iterator it_out = source_indices_->begin (), it_out_e = source_indices_->end () - 1;
-  std::vector <int>::iterator it_in, it_in_e = source_indices_->end ();
+  auto it_out = source_indices_->begin (), it_out_e = source_indices_->end () - 1;
+  auto it_in_e = source_indices_->end ();
   for ( ; it_out != it_out_e; it_out++)
   {
-    it_in = it_out + 1;
+    auto it_in = it_out + 1;
     const PointSource *pt1 = &(*input_)[*it_out];
     for ( ; it_in != it_in_e; it_in++)
     {
@@ -600,8 +607,8 @@ pcl::registration::FPCSInitialAlignment <PointSource, PointTarget, NormalT, Scal
         // add here normal evaluation if normals are given
         if (use_normals_)
         {
-          const NormalT *pt1_n = &(source_normals_->points[*it_out]);
-          const NormalT *pt2_n = &(source_normals_->points[*it_in]);
+          const NormalT *pt1_n = &((*source_normals_)[*it_out]);
+          const NormalT *pt2_n = &((*source_normals_)[*it_in]);
 
           float norm_angle_1 = (pt1_n->getNormalVector3fMap () - pt2_n->getNormalVector3fMap ()).norm ();
           float norm_angle_2 = (pt1_n->getNormalVector3fMap () + pt2_n->getNormalVector3fMap ()).norm ();
@@ -618,7 +625,7 @@ pcl::registration::FPCSInitialAlignment <PointSource, PointTarget, NormalT, Scal
   }
 
   // return success if at least one correspondence was found
-  return (pairs.size () == 0 ? -1 : 0);
+  return (pairs.empty () ? -1 : 0);
 }
 
 
@@ -633,19 +640,19 @@ pcl::registration::FPCSInitialAlignment <PointSource, PointTarget, NormalT, Scal
 {
   // calculate edge lengths of base
   float dist_base[4];
-  dist_base[0] = pcl::euclideanDistance (target_->points[base_indices[0]], target_->points[base_indices[2]]);
-  dist_base[1] = pcl::euclideanDistance (target_->points[base_indices[0]], target_->points[base_indices[3]]);
-  dist_base[2] = pcl::euclideanDistance (target_->points[base_indices[1]], target_->points[base_indices[2]]);
-  dist_base[3] = pcl::euclideanDistance (target_->points[base_indices[1]], target_->points[base_indices[3]]);
+  dist_base[0] = pcl::euclideanDistance ((*target_)[base_indices[0]], (*target_)[base_indices[2]]);
+  dist_base[1] = pcl::euclideanDistance ((*target_)[base_indices[0]], (*target_)[base_indices[3]]);
+  dist_base[2] = pcl::euclideanDistance ((*target_)[base_indices[1]], (*target_)[base_indices[2]]);
+  dist_base[3] = pcl::euclideanDistance ((*target_)[base_indices[1]], (*target_)[base_indices[3]]);
 
   // loop over first point pair correspondences and store intermediate points 'e' in new point cloud
   PointCloudSourcePtr cloud_e (new PointCloudSource);
   cloud_e->resize (pairs_a.size () * 2);
   PointCloudSourceIterator it_pt = cloud_e->begin ();
-  for (pcl::Correspondences::const_iterator it_pair = pairs_a.begin (), it_pair_e = pairs_a.end () ; it_pair != it_pair_e; it_pair++)
+  for (const auto &pair : pairs_a)
   {
-    const PointSource *pt1 = &(input_->points[it_pair->index_match]);
-    const PointSource *pt2 = &(input_->points[it_pair->index_query]);
+    const PointSource *pt1 = &((*input_)[pair.index_match]);
+    const PointSource *pt2 = &((*input_)[pair.index_query]);
 
     // calculate intermediate points using both ratios from base (r1,r2)
     for (int i = 0; i < 2; i++, it_pt++)
@@ -664,29 +671,29 @@ pcl::registration::FPCSInitialAlignment <PointSource, PointTarget, NormalT, Scal
   std::vector <float> dists_sqr;
 
   // loop over second point pair correspondences
-  for (pcl::Correspondences::const_iterator it_pair = pairs_b.begin (), it_pair_e = pairs_b.end () ; it_pair != it_pair_e; it_pair++)
+  for (const auto &pair : pairs_b)
   {
-    const PointTarget *pt1 = &(input_->points[it_pair->index_match]);
-    const PointTarget *pt2 = &(input_->points[it_pair->index_query]);
+    const PointTarget *pt1 = &((*input_)[pair.index_match]);
+    const PointTarget *pt2 = &((*input_)[pair.index_query]);
 
     // calculate intermediate points using both ratios from base (r1,r2)
-    for (int i = 0; i < 2; i++)
+    for (const float &r : ratio)
     {
       PointTarget pt_e;
-      pt_e.x = pt1->x + ratio[i] * (pt2->x - pt1->x);
-      pt_e.y = pt1->y + ratio[i] * (pt2->y - pt1->y);
-      pt_e.z = pt1->z + ratio[i] * (pt2->z - pt1->z);
+      pt_e.x = pt1->x + r * (pt2->x - pt1->x);
+      pt_e.y = pt1->y + r * (pt2->y - pt1->y);
+      pt_e.z = pt1->z + r * (pt2->z - pt1->z);
 
       // search for corresponding intermediate points
       tree_e->radiusSearch (pt_e, coincidation_limit_, ids, dists_sqr);
-      for (std::vector <int>::iterator it = ids.begin (), it_e = ids.end (); it != it_e; it++)
+      for (const int &id : ids)
       {
         std::vector <int> match_indices (4);
 
-        match_indices[0] = pairs_a[static_cast <int> (std::floor ((float)(*it/2.f)))].index_match;
-        match_indices[1] = pairs_a[static_cast <int> (std::floor ((float)(*it/2.f)))].index_query;
-        match_indices[2] = it_pair->index_match;
-        match_indices[3] = it_pair->index_query;
+        match_indices[0] = pairs_a[static_cast <int> (std::floor ((float)(id/2.f)))].index_match;
+        match_indices[1] = pairs_a[static_cast <int> (std::floor ((float)(id/2.f)))].index_query;
+        match_indices[2] = pair.index_match;
+        match_indices[3] = pair.index_query;
 
         // EDITED: added coarse check of match based on edge length (due to rigid-body )
         if (checkBaseMatch (match_indices, dist_base) < 0)
@@ -697,8 +704,8 @@ pcl::registration::FPCSInitialAlignment <PointSource, PointTarget, NormalT, Scal
     }
   }
 
-  // return unsuccessfull if no match was found
-  return (matches.size () > 0 ? 0 : -1);
+  // return unsuccessful if no match was found
+  return (!matches.empty () ? 0 : -1);
 }
 
 
@@ -708,10 +715,10 @@ pcl::registration::FPCSInitialAlignment <PointSource, PointTarget, NormalT, Scal
   const std::vector <int> &match_indices,
   const float (&dist_ref)[4])
 {
-  float d0 = pcl::euclideanDistance (input_->points[match_indices[0]], input_->points[match_indices[2]]);
-  float d1 = pcl::euclideanDistance (input_->points[match_indices[0]], input_->points[match_indices[3]]);
-  float d2 = pcl::euclideanDistance (input_->points[match_indices[1]], input_->points[match_indices[2]]);
-  float d3 = pcl::euclideanDistance (input_->points[match_indices[1]], input_->points[match_indices[3]]);
+  float d0 = pcl::euclideanDistance ((*input_)[match_indices[0]], (*input_)[match_indices[2]]);
+  float d1 = pcl::euclideanDistance ((*input_)[match_indices[0]], (*input_)[match_indices[3]]);
+  float d2 = pcl::euclideanDistance ((*input_)[match_indices[1]], (*input_)[match_indices[2]]);
+  float d3 = pcl::euclideanDistance ((*input_)[match_indices[1]], (*input_)[match_indices[3]]);
 
   // check edge distances of match w.r.t the base
   return (std::abs (d0 - dist_ref[0]) < max_edge_diff_ && std::abs (d1 - dist_ref[1]) < max_edge_diff_ &&
@@ -730,16 +737,16 @@ pcl::registration::FPCSInitialAlignment <PointSource, PointTarget, NormalT, Scal
   float fitness_score = FLT_MAX;
 
   // loop over all Candidate matches
-  for (std::vector <std::vector <int> >::iterator match_indices = matches.begin (), it_e = matches.end (); match_indices != it_e; match_indices++)
+  for (auto &match : matches)
   {
     Eigen::Matrix4f transformation_temp;
     pcl::Correspondences correspondences_temp;
 
     // determine corresondences between base and match according to their distance to centroid
-    linkMatchWithBase (base_indices, *match_indices, correspondences_temp);
+    linkMatchWithBase (base_indices, match, correspondences_temp);
 
     // check match based on residuals of the corresponding points after
-    if (validateMatch (base_indices, *match_indices, correspondences_temp, transformation_temp) < 0)
+    if (validateMatch (base_indices, match, correspondences_temp, transformation_temp) < 0)
       continue;
 
     // check resulting  using a sub sample of the source point cloud and compare to previous matches
@@ -763,7 +770,7 @@ pcl::registration::FPCSInitialAlignment <PointSource, PointTarget, NormalT, Scal
   pcl::Correspondences &correspondences)
 {
   // calculate centroid of base and target
-  Eigen::Vector4f centre_base, centre_match;
+  Eigen::Vector4f centre_base {0, 0, 0, 0}, centre_match {0, 0, 0, 0};
   pcl::compute3DCentroid (*target_, base_indices, centre_base);
   pcl::compute3DCentroid (*input_, match_indices, centre_match);
 
@@ -780,25 +787,23 @@ pcl::registration::FPCSInitialAlignment <PointSource, PointTarget, NormalT, Scal
   // find corresponding points according to their distance to the centroid
   std::vector <int> copy = match_indices;
 
-  std::vector <int>::const_iterator it_base = base_indices.begin (), it_base_e = base_indices.end ();
-  std::vector <int>::iterator it_match, it_match_e = copy.end ();
-  std::vector <int>::iterator it_match_orig = match_indices.begin ();
-  for (; it_base != it_base_e; it_base++, it_match_orig++)
+  auto it_match_orig = match_indices.begin ();
+  for (auto it_base = base_indices.cbegin (), it_base_e = base_indices.cend (); it_base != it_base_e; it_base++, it_match_orig++)
   {
-    float dist_sqr_1 = pcl::squaredEuclideanDistance (target_->points[*it_base], centre_pt_base);
+    float dist_sqr_1 = pcl::squaredEuclideanDistance ((*target_)[*it_base], centre_pt_base);
     float best_diff_sqr = FLT_MAX;
-    int best_index;
+    int best_index = -1;
 
-    for (it_match = copy.begin (); it_match != it_match_e; it_match++)
+    for (const int &match_index : copy)
     {
       // calculate difference of distances to centre point
-      float dist_sqr_2 = pcl::squaredEuclideanDistance (input_->points[*it_match], centre_pt_match);
+      float dist_sqr_2 = pcl::squaredEuclideanDistance ((*input_)[match_index], centre_pt_match);
       float diff_sqr = std::abs(dist_sqr_1 - dist_sqr_2);
 
       if (diff_sqr < best_diff_sqr)
       {
         best_diff_sqr = diff_sqr;
-        best_index = *it_match;
+        best_index = match_index;
       }
     }
 
@@ -868,7 +873,7 @@ pcl::registration::FPCSInitialAlignment <PointSource, PointTarget, NormalT, Scal
       break;
   }
 
-  // check current costs and return unsuccessfull if larger than previous ones
+  // check current costs and return unsuccessful if larger than previous ones
   inlier_score_temp /= static_cast <float> (nr_points);
   float fitness_score_temp = 1.f - inlier_score_temp;
 
@@ -885,7 +890,7 @@ template <typename PointSource, typename PointTarget, typename NormalT, typename
 pcl::registration::FPCSInitialAlignment <PointSource, PointTarget, NormalT, Scalar>::finalCompute (
   const std::vector <MatchingCandidates > &candidates)
 {
-  // get best fitness_score over all trys
+  // get best fitness_score over all tries
   int nr_candidates = static_cast <int> (candidates.size ());
   int best_index = -1;
   float best_score = FLT_MAX;

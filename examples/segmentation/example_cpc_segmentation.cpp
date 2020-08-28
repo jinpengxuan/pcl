@@ -35,38 +35,24 @@
  *
  */
 
-// Stdlib
-#include <stdlib.h>
-#include <cmath>
-#include <limits.h>
+#include <thread>
 
 #include <boost/format.hpp>
-#include <boost/filesystem.hpp>
 
-// PCL input/output
 #include <pcl/console/parse.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/visualization/pcl_visualizer.h>
-#include <pcl/visualization/point_cloud_color_handlers.h>
 
-//PCL other
-#include <pcl/filters/passthrough.h>
-#include <pcl/segmentation/supervoxel_clustering.h>
-
-// The segmentation class this example is for
 #include <pcl/segmentation/cpc_segmentation.h>
 
-// VTK
-#include <vtkImageReader2Factory.h>
-#include <vtkImageReader2.h>
-#include <vtkImageData.h>
-#include <vtkImageFlip.h>
 #include <vtkPolyLine.h>
+
+using namespace std::chrono_literals;
 
 /// *****  Type Definitions ***** ///
 
-typedef pcl::PointXYZRGBA PointT;  // The point type used for input
-typedef pcl::LCCPSegmentation<PointT>::SupervoxelAdjacencyList SuperVoxelAdjacencyList;
+using PointT = pcl::PointXYZRGBA;  // The point type used for input
+using SuperVoxelAdjacencyList = pcl::LCCPSegmentation<PointT>::SupervoxelAdjacencyList;
 
 /// Callback and variables
 
@@ -136,12 +122,12 @@ keyboardEventOccurred (const pcl::visualization::KeyboardEvent& event_arg,
 /** \brief Displays info text in the specified PCLVisualizer
  *  \param[in] viewer_arg The PCLVisualizer to modify  */
 void
-printText (boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer_arg);
+printText (pcl::visualization::PCLVisualizer::Ptr viewer_arg);
 
 /** \brief Removes info text in the specified PCLVisualizer
  *  \param[in] viewer_arg The PCLVisualizer to modify  */
 void
-removeText (boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer_arg);
+removeText (pcl::visualization::PCLVisualizer::Ptr viewer_arg);
 
 /// ---- main ---- ///
 int
@@ -189,8 +175,8 @@ LCCPSegmentation Parameters: \n\
 CPCSegmentation Parameters: \n\
   -cut <max_cuts>,<cutting_min_segments>,<min_cut_score> - Plane cutting parameters for splitting of segments\n\
        <max_cuts> - Perform cuts up to this recursion level. Cuts are performed in each segment separately (default 25)\n\
-       <cutting_min_segments> - Minumum number of supervoxels in the segment to perform cutting (default 400).\n\
-       <min_cut_score> - Minumum score a proposed cut needs to have for being cut (default 0.16)\n\
+       <cutting_min_segments> - Minimum number of supervoxels in the segment to perform cutting (default 400).\n\
+       <min_cut_score> - Minimum score a proposed cut needs to have for being cut (default 0.16)\n\
   -clocal - Use locally constrained cuts (recommended flag)\n\
   -cdir - Use directed weigths (recommended flag) \n\
   -cclean - Use clean cuts. \n\
@@ -211,7 +197,7 @@ CPCSegmentation Parameters: \n\
   bool save_binary_pcd = pcl::console::find_switch (argc, argv, "-bin");
 
   /// Create variables needed for preparations
-  std::string outputname ("");
+  std::string outputname;
   pcl::PointCloud<PointT>::Ptr input_cloud_ptr (new pcl::PointCloud<PointT>);
   pcl::PointCloud<pcl::Normal>::Ptr input_normals_ptr (new pcl::PointCloud<pcl::Normal>);
   bool has_normals = false;
@@ -255,15 +241,15 @@ CPCSegmentation Parameters: \n\
   {
     pcl::console::parse (argc, argv, "-o", outputname);
 
-    // If no filename is given, get output filename from inputname (strip seperators and file extension)
+    // If no filename is given, get output filename from inputname (strip separators and file extension)
     if (outputname.empty () || (outputname.at (0) == '-'))
     {
       outputname = pcd_filename;
-      size_t sep = outputname.find_last_of ('/');
+      std::size_t sep = outputname.find_last_of ('/');
       if (sep != std::string::npos)
         outputname = outputname.substr (sep + 1, outputname.size () - sep - 1);
 
-      size_t dot = outputname.find_last_of ('.');
+      std::size_t dot = outputname.find_last_of ('.');
       if (dot != std::string::npos)
         outputname = outputname.substr (0, dot);
     }
@@ -284,7 +270,7 @@ CPCSegmentation Parameters: \n\
   // LCCPSegmentation Stuff
   float concavity_tolerance_threshold = 10;
   float smoothness_threshold = 0.1;
-  uint32_t min_segment_size = 0;
+  std::uint32_t min_segment_size = 0;
   bool use_extended_convexity;
   bool use_sanity_criterion;
 
@@ -348,7 +334,7 @@ CPCSegmentation Parameters: \n\
   textcolor = bg_white?0:1;
 
   pcl::console::print_info ("Maximum cuts: %d\n", max_cuts);
-  pcl::console::print_info ("Minumum segment siz: %d\n", cutting_min_segments);
+  pcl::console::print_info ("Minimum segment size: %d\n", cutting_min_segments);
   pcl::console::print_info ("Use local constrain: %d\n", use_local_constrain);
   pcl::console::print_info ("Use directed weights: %d\n", use_directed_cutting);
   pcl::console::print_info ("Use clean cuts: %d\n", use_clean_cutting);
@@ -365,7 +351,7 @@ CPCSegmentation Parameters: \n\
   super.setColorImportance (color_importance);
   super.setSpatialImportance (spatial_importance);
   super.setNormalImportance (normal_importance);
-  std::map<uint32_t, pcl::Supervoxel<PointT>::Ptr> supervoxel_clusters;
+  std::map<std::uint32_t, pcl::Supervoxel<PointT>::Ptr> supervoxel_clusters;
 
   PCL_INFO ("Extracting supervoxels\n");
   super.extract (supervoxel_clusters);
@@ -380,13 +366,13 @@ CPCSegmentation Parameters: \n\
   PCL_INFO (temp.str ().c_str ());
 
   PCL_INFO ("Getting supervoxel adjacency\n");
-  std::multimap<uint32_t, uint32_t>supervoxel_adjacency;
+  std::multimap<std::uint32_t, std::uint32_t>supervoxel_adjacency;
   super.getSupervoxelAdjacency (supervoxel_adjacency);
 
   /// Get the cloud of supervoxel centroid with normals and the colored cloud with supervoxel coloring (this is used for visulization)
   pcl::PointCloud<pcl::PointNormal>::Ptr sv_centroid_normal_cloud = pcl::SupervoxelClustering<PointT>::makeSupervoxelNormalCloud (supervoxel_clusters);
 
-  /// Set paramters for LCCP preprocessing and CPC (CPC inherits from LCCP, thus it includes LCCP's functionality)
+  /// Set parameters for LCCP preprocessing and CPC (CPC inherits from LCCP, thus it includes LCCP's functionality)
 
   PCL_INFO ("Starting Segmentation\n");
   pcl::CPCSegmentation<PointT> cpc;
@@ -445,18 +431,16 @@ CPCSegmentation Parameters: \n\
     // Currently this is a work-around creating a polygon mesh consisting of two triangles for each edge
     using namespace pcl;
 
-    typedef LCCPSegmentation<PointT>::VertexIterator VertexIterator;
-    typedef LCCPSegmentation<PointT>::AdjacencyIterator AdjacencyIterator;
-    typedef LCCPSegmentation<PointT>::EdgeID EdgeID;
-
-    std::set<EdgeID> edge_drawn;
+    using VertexIterator = LCCPSegmentation<PointT>::VertexIterator;
+    using AdjacencyIterator = LCCPSegmentation<PointT>::AdjacencyIterator;
+    using EdgeID = LCCPSegmentation<PointT>::EdgeID;
 
     const unsigned char black_color   [3] = {0, 0, 0};
     const unsigned char white_color   [3] = {255, 255, 255};
     const unsigned char concave_color [3] = {255,  0,  0};
     const unsigned char cut_color     [3] = {  0,255,  0};
     const unsigned char* convex_color     = bg_white ? black_color : white_color;
-    const unsigned char* color;
+    const unsigned char* color = nullptr;
 
     //The vertices in the supervoxel adjacency list are the supervoxel centroids
     //This iterates through them, finding the edges
@@ -473,7 +457,7 @@ CPCSegmentation Parameters: \n\
     vtkSmartPointer<vtkPolyData> polyData = vtkSmartPointer<vtkPolyData>::New ();
     for (VertexIterator itr = vertex_iterator_range.first; itr != vertex_iterator_range.second; ++itr)
     {
-      const uint32_t sv_label = sv_adjacency_list[*itr];
+      const std::uint32_t sv_label = sv_adjacency_list[*itr];
       std::pair<AdjacencyIterator, AdjacencyIterator> neighbors = boost::adjacent_vertices (*itr, sv_adjacency_list);
 
       for (AdjacencyIterator itr_neighbor = neighbors.first; itr_neighbor != neighbors.second; ++itr_neighbor)
@@ -489,13 +473,17 @@ CPCSegmentation Parameters: \n\
           color = concave_color;
 
         // two times since we add also two points per edge
+#if (VTK_MAJOR_VERSION < 7) || (VTK_MAJOR_VERSION == 7 && VTK_MINOR_VERSION == 0)
         colors->InsertNextTupleValue (color);
         colors->InsertNextTupleValue (color);
-
+#else       
+        colors->InsertNextTypedTuple (color);
+        colors->InsertNextTypedTuple (color);
+#endif      
         pcl::Supervoxel<PointT>::Ptr supervoxel = supervoxel_clusters.at (sv_label);
         pcl::PointXYZRGBA vert_curr = supervoxel->centroid_;
 
-        const uint32_t sv_neighbor_label = sv_adjacency_list[*itr_neighbor];
+        const std::uint32_t sv_neighbor_label = sv_adjacency_list[*itr_neighbor];
         pcl::Supervoxel<PointT>::Ptr supervoxel_neigh = supervoxel_clusters.at (sv_neighbor_label);
         pcl::PointXYZRGBA vert_neigh = supervoxel_neigh->centroid_;
 
@@ -522,7 +510,7 @@ CPCSegmentation Parameters: \n\
     pcl::visualization::PCLVisualizer::Ptr viewer (new pcl::visualization::PCLVisualizer ("3D Viewer"));
     float bg_color = bg_white?1:0;
     viewer->setBackgroundColor (bg_color, bg_color, bg_color);
-    viewer->registerKeyboardCallback (keyboardEventOccurred, 0);
+    viewer->registerKeyboardCallback (keyboardEventOccurred, nullptr);
     viewer->addPointCloud (cpc_labeled_cloud, "cpc_cloud");
     /// Visualization Loop
     PCL_INFO ("Loading viewer\n");
@@ -590,7 +578,7 @@ CPCSegmentation Parameters: \n\
           viewer->addText ("Press d to show help", 5, 10, 12, textcolor, textcolor, textcolor, "help_text");
       }
 
-      boost::this_thread::sleep (boost::posix_time::microseconds (100000));
+      std::this_thread::sleep_for(100ms);
     }
   }  /// END if (show_visualization)
 
@@ -601,7 +589,7 @@ CPCSegmentation Parameters: \n\
 /// -------------------------| Definitions of helper functions|-------------------------
 
 void
-printText (boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer_arg)
+printText (pcl::visualization::PCLVisualizer::Ptr viewer_arg)
 {
   std::string on_str = "ON";
   std::string off_str = "OFF";  
@@ -640,7 +628,7 @@ printText (boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer_arg)
 }
 
 void
-removeText (boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer_arg)
+removeText (pcl::visualization::PCLVisualizer::Ptr viewer_arg)
 {
   viewer_arg->removeShape ("hud_text");
   viewer_arg->removeShape ("normals_text");

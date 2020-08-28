@@ -38,6 +38,7 @@
 #ifndef PCL_ISS_KEYPOINT3D_IMPL_H_
 #define PCL_ISS_KEYPOINT3D_IMPL_H_
 
+#include <Eigen/Eigenvalues> // for SelfAdjointEigenSolver
 #include <pcl/features/boundary.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/features/integral_image_normal.h>
@@ -112,14 +113,15 @@ pcl::ISSKeypoint3D<PointInT, PointOutT, NormalT>::getBoundaryPoints (PointCloudI
   pcl::BoundaryEstimation<PointInT, NormalT, pcl::Boundary> boundary_estimator;
   boundary_estimator.setInputCloud (input_);
 
-  int index;
-#ifdef _OPENMP
-#pragma omp parallel for private(u, v) num_threads(threads_)
-#endif
-  for (index = 0; index < int (input.points.size ()); index++)
+#pragma omp parallel for \
+  default(none) \
+  shared(angle_threshold, boundary_estimator, border_radius, edge_points, input) \
+  firstprivate(u, v) \
+  num_threads(threads_)
+  for (int index = 0; index < int (input.size ()); index++)
   {
     edge_points[index] = false;
-    PointInT current_point = input.points[index];
+    PointInT current_point = input[index];
 
     if (pcl::isFinite(current_point))
     {
@@ -133,7 +135,7 @@ pcl::ISSKeypoint3D<PointInT, PointOutT, NormalT>::getBoundaryPoints (PointCloudI
 
       if (n_neighbors >= min_neighbors_)
       {
-	boundary_estimator.getCoordinateSystemOnPlane (normals_->points[index], u, v);
+	boundary_estimator.getCoordinateSystemOnPlane ((*normals_)[index], u, v);
 
 	if (boundary_estimator.isBoundaryPoint (input, static_cast<int> (index), nn_indices, u, v, angle_threshold))
 	  edge_points[index] = true;
@@ -148,7 +150,7 @@ pcl::ISSKeypoint3D<PointInT, PointOutT, NormalT>::getBoundaryPoints (PointCloudI
 template<typename PointInT, typename PointOutT, typename NormalT> void
 pcl::ISSKeypoint3D<PointInT, PointOutT, NormalT>::getScatterMatrix (const int& current_index, Eigen::Matrix3d &cov_m)
 {
-  const PointInT& current_point = (*input_).points[current_index];
+  const PointInT& current_point = (*input_)[current_index];
 
   double central_point[3];
   memset(central_point, 0, sizeof(double) * 3);
@@ -175,7 +177,7 @@ pcl::ISSKeypoint3D<PointInT, PointOutT, NormalT>::getScatterMatrix (const int& c
 
   for (int n_idx = 0; n_idx < n_neighbors; n_idx++)
   {
-    const PointInT& n_point = (*input_).points[nn_indices[n_idx]];
+    const PointInT& n_point = (*input_)[nn_indices[n_idx]];
 
     double neigh_point[3];
     memset(neigh_point, 0, sizeof(double) * 3);
@@ -234,13 +236,11 @@ pcl::ISSKeypoint3D<PointInT, PointOutT, NormalT>::initCompute ()
     return (false);
   }
 
-  if (third_eigen_value_)
     delete[] third_eigen_value_;
 
   third_eigen_value_ = new double[input_->size ()];
   memset(third_eigen_value_, 0, sizeof(double) * input_->size ());
 
-  if (edge_points_)
     delete[] edge_points_;
 
   if (border_radius_ > 0.0)
@@ -300,14 +300,14 @@ pcl::ISSKeypoint3D<PointInT, PointOutT, NormalT>::detectKeypoints (PointCloudOut
 
   bool* borders = new bool [input_->size()];
 
-  int index;
-#ifdef _OPENMP
-  #pragma omp parallel for num_threads(threads_)
-#endif
-  for (index = 0; index < int (input_->size ()); index++)
+#pragma omp parallel for \
+  default(none) \
+  shared(borders) \
+  num_threads(threads_)
+  for (int index = 0; index < int (input_->size ()); index++)
   {
     borders[index] = false;
-    PointInT current_point = input_->points[index];
+    PointInT current_point = (*input_)[index];
 
     if ((border_radius_ > 0.0) && (pcl::isFinite(current_point)))
     {
@@ -316,9 +316,9 @@ pcl::ISSKeypoint3D<PointInT, PointOutT, NormalT>::detectKeypoints (PointCloudOut
 
       this->searchForNeighbors (static_cast<int> (index), border_radius_, nn_indices, nn_distances);
 
-      for (size_t j = 0 ; j < nn_indices.size (); j++)
+      for (const int &nn_index : nn_indices)
       {
-        if (edge_points_[nn_indices[j]])
+        if (edge_points_[nn_index])
         {
           borders[index] = true;
           break;
@@ -330,7 +330,7 @@ pcl::ISSKeypoint3D<PointInT, PointOutT, NormalT>::detectKeypoints (PointCloudOut
 #ifdef _OPENMP
   Eigen::Vector3d *omp_mem = new Eigen::Vector3d[threads_];
 
-  for (size_t i = 0; i < threads_; i++)
+  for (std::size_t i = 0; i < threads_; i++)
     omp_mem[i].setZero (3);
 #else
   Eigen::Vector3d *omp_mem = new Eigen::Vector3d[1];
@@ -341,20 +341,21 @@ pcl::ISSKeypoint3D<PointInT, PointOutT, NormalT>::detectKeypoints (PointCloudOut
   double *prg_local_mem = new double[input_->size () * 3];
   double **prg_mem = new double * [input_->size ()];
 
-  for (size_t i = 0; i < input_->size (); i++)
+  for (std::size_t i = 0; i < input_->size (); i++)
     prg_mem[i] = prg_local_mem + 3 * i;
 
-#ifdef _OPENMP
-  #pragma omp parallel for num_threads(threads_)
-#endif
-  for (index = 0; index < static_cast<int> (input_->size ()); index++)
+#pragma omp parallel for \
+  default(none) \
+  shared(borders, omp_mem, prg_mem) \
+  num_threads(threads_)
+  for (int index = 0; index < static_cast<int> (input_->size ()); index++)
   {
 #ifdef _OPENMP
     int tid = omp_get_thread_num ();
 #else
     int tid = 0;
 #endif
-    PointInT current_point = input_->points[index];
+    PointInT current_point = (*input_)[index];
 
     if ((!borders[index]) && pcl::isFinite(current_point))
     {
@@ -368,7 +369,7 @@ pcl::ISSKeypoint3D<PointInT, PointOutT, NormalT>::detectKeypoints (PointCloudOut
       const double& e2c = solver.eigenvalues ()[1];
       const double& e3c = solver.eigenvalues ()[0];
 
-      if (!pcl_isfinite (e1c) || !pcl_isfinite (e2c) || !pcl_isfinite (e3c))
+      if (!std::isfinite (e1c) || !std::isfinite (e2c) || !std::isfinite (e3c))
 	continue;
 
       if (e3c < 0)
@@ -383,11 +384,11 @@ pcl::ISSKeypoint3D<PointInT, PointOutT, NormalT>::detectKeypoints (PointCloudOut
       omp_mem[tid][2] = e3c;
     }
 
-    for (int d = 0; d < omp_mem[tid].size (); d++)
+    for (Eigen::Index d = 0; d < omp_mem[tid].size (); d++)
         prg_mem[index][d] = omp_mem[tid][d];
   }
 
-  for (index = 0; index < int (input_->size ()); index++)
+  for (int index = 0; index < int (input_->size ()); index++)
   {
    if (!borders[index])
     {
@@ -397,15 +398,15 @@ pcl::ISSKeypoint3D<PointInT, PointOutT, NormalT>::detectKeypoints (PointCloudOut
   }
 
   bool* feat_max = new bool [input_->size()];
-  bool is_max;
 
-#ifdef _OPENMP
-  #pragma omp parallel for private(is_max) num_threads(threads_)
-#endif
-  for (index = 0; index < int (input_->size ()); index++)
+#pragma omp parallel for \
+  default(none) \
+  shared(feat_max) \
+  num_threads(threads_)
+  for (int index = 0; index < int (input_->size ()); index++)
   {
     feat_max [index] = false;
-    PointInT current_point = input_->points[index];
+    PointInT current_point = (*input_)[index];
 
     if ((third_eigen_value_[index] > 0.0) && (pcl::isFinite(current_point)))
     {
@@ -419,7 +420,7 @@ pcl::ISSKeypoint3D<PointInT, PointOutT, NormalT>::detectKeypoints (PointCloudOut
 
       if (n_neighbors >= min_neighbors_)
       {
-        is_max = true;
+        bool is_max = true;
 
         for (int j = 0 ; j < n_neighbors; j++)
           if (third_eigen_value_[index] < third_eigen_value_[nn_indices[j]])
@@ -430,25 +431,24 @@ pcl::ISSKeypoint3D<PointInT, PointOutT, NormalT>::detectKeypoints (PointCloudOut
     }
   }
 
-#ifdef _OPENMP
-#pragma omp parallel for shared (output) num_threads(threads_)
-#endif
-  for (index = 0; index < int (input_->size ()); index++)
+#pragma omp parallel for \
+  default(none) \
+  shared(feat_max, output) \
+  num_threads(threads_)
+  for (int index = 0; index < int (input_->size ()); index++)
   {
     if (feat_max[index])
-#ifdef _OPENMP
 #pragma omp critical
-#endif
     {
       PointOutT p;
-      p.getVector3fMap () = input_->points[index].getVector3fMap ();
+      p.getVector3fMap () = (*input_)[index].getVector3fMap ();
       output.points.push_back(p);
       keypoints_indices_->indices.push_back (index);
     }
   }
 
   output.header = input_->header;
-  output.width = static_cast<uint32_t> (output.points.size ());
+  output.width = output.size ();
   output.height = 1;
 
   // Clear the contents of variables and arrays before the beginning of the next computation.

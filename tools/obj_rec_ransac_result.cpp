@@ -46,7 +46,6 @@
 #include <pcl/recognition/ransac_based/obj_rec_ransac.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/console/print.h>
-#include <pcl/console/parse.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_cloud.h>
 #include <vtkVersion.h>
@@ -62,8 +61,9 @@
 #include <cstdio>
 #include <vector>
 #include <list>
+#include <thread>
 
-using namespace std;
+using namespace std::chrono_literals;
 using namespace pcl;
 using namespace io;
 using namespace console;
@@ -98,7 +98,7 @@ class CallbackParameters
     PCLVisualizer& viz_;
     PointCloud<PointXYZ>& scene_points_;
     PointCloud<Normal>& scene_normals_;
-    list<vtkActor*> actors_;
+    std::list<vtkActor*> actors_;
 };
 
 //===========================================================================================================================================
@@ -110,7 +110,7 @@ main (int argc, char** argv)
 
   const int num_params = 3;
   float parameters[num_params] = {40.0f/*pair width*/, 5.0f/*voxel size*/, 15.0f/*max co-planarity angle*/};
-  string parameter_names[num_params] = {"pair_width", "voxel_size", "max_coplanarity_angle"};
+  std::string parameter_names[num_params] = {"pair_width", "voxel_size", "max_coplanarity_angle"};
 
   // Read the user input if any
   for ( int i = 0 ; i < argc-1 && i < num_params ; ++i )
@@ -125,8 +125,8 @@ main (int argc, char** argv)
 
   printf ("The following parameter values will be used:\n");
   for ( int i = 0 ; i < num_params ; ++i )
-    cout << "  " << parameter_names[i] << " = " << parameters[i] << endl;
-  cout << endl;
+    std::cout << "  " << parameter_names[i] << " = " << parameters[i] << std::endl;
+  std::cout << std::endl;
 
   run (parameters[0], parameters[1], parameters[2]);
 }
@@ -141,17 +141,17 @@ run (float pair_width, float voxel_size, float max_coplanarity_angle)
   objrec.setMaxCoplanarityAngleDegrees (max_coplanarity_angle);
 
   // The models to be loaded
-  list<string> model_names;
-  model_names.push_back (string ("tum_amicelli_box"));
-  model_names.push_back (string ("tum_rusk_box"));
-  model_names.push_back (string ("tum_soda_bottle"));
+  std::list<std::string> model_names;
+  model_names.emplace_back("tum_amicelli_box");
+  model_names.emplace_back("tum_rusk_box");
+  model_names.emplace_back("tum_soda_bottle");
 
-  list<PointCloud<PointXYZ>::Ptr> model_points_list;
-  list<PointCloud<Normal>::Ptr> model_normals_list;
-  list<vtkSmartPointer<vtkPolyData> > vtk_models_list;
+  std::list<PointCloud<PointXYZ>::Ptr> model_points_list;
+  std::list<PointCloud<Normal>::Ptr> model_normals_list;
+  std::list<vtkSmartPointer<vtkPolyData> > vtk_models_list;
 
   // Load the models and add them to the recognizer
-  for ( list<string>::iterator it = model_names.begin () ; it != model_names.end () ; ++it )
+  for (const auto &model_name : model_names)
   {
     PointCloud<PointXYZ>::Ptr model_points (new PointCloud<PointXYZ> ());
     model_points_list.push_back (model_points);
@@ -163,14 +163,14 @@ run (float pair_width, float voxel_size, float max_coplanarity_angle)
     vtk_models_list.push_back (vtk_model);
 
     // Compose the file
-    string file_name = string("../../test/") + *it + string (".vtk");
+    std::string file_name = std::string("../../test/") + model_name + std::string (".vtk");
 
     // Get the points and normals from the input model
     if ( !vtk2PointCloud (file_name.c_str (), *model_points, *model_normals, vtk_model) )
       continue;
 
     // Add the model
-    objrec.addModel (*model_points, *model_normals, *it, vtk_model);
+    objrec.addModel (*model_points, *model_normals, model_name, vtk_model);
   }
 
   // The scene in which the models are supposed to be recognized
@@ -221,7 +221,7 @@ run (float pair_width, float voxel_size, float max_coplanarity_angle)
   {
     //main loop of the visualizer
     viz.spinOnce (100);
-    boost::this_thread::sleep (boost::posix_time::microseconds (100000));
+    std::this_thread::sleep_for(100ms);
   }
 }
 
@@ -241,12 +241,12 @@ update (CallbackParameters* params)
 {
   // Clear the visualizer from old object instances
   vtkRenderer *renderer = params->viz_.getRenderWindow ()->GetRenderers ()->GetFirstRenderer ();
-  for ( list<vtkActor*>::iterator it = params->actors_.begin () ; it != params->actors_.end () ; ++it )
-    renderer->RemoveActor (*it);
+  for (const auto &actor : params->actors_)
+    renderer->RemoveActor (actor);
   params->actors_.clear ();
 
   // This will be the output of the recognition
-  list<ObjRecRANSAC::Output> rec_output;
+  std::list<ObjRecRANSAC::Output> rec_output;
 
   // For convenience
   ObjRecRANSAC& objrec = params->objrec_;
@@ -256,9 +256,9 @@ update (CallbackParameters* params)
   int i = 0;
 
   // Show the hypotheses
-  for ( list<ObjRecRANSAC::Output>::iterator it = rec_output.begin () ; it != rec_output.end () ; ++it, ++i )
+  for ( std::list<ObjRecRANSAC::Output>::iterator it = rec_output.begin () ; it != rec_output.end () ; ++it, ++i )
   {
-    cout << it->object_name_ << " has a confidence value of " << it->match_confidence_ << endl;
+    std::cout << it->object_name_ << " has a confidence value of " << it->match_confidence_ << std::endl;
 
     // Make a copy of the VTK model
     vtkSmartPointer<vtkPolyData> vtk_model = vtkSmartPointer<vtkPolyData>::New ();
@@ -282,21 +282,13 @@ update (CallbackParameters* params)
     // Setup the transformator
     vtkSmartPointer<vtkTransformPolyDataFilter> vtk_transformator = vtkSmartPointer<vtkTransformPolyDataFilter>::New ();
     vtk_transformator->SetTransform (vtk_transform);
-#if VTK_MAJOR_VERSION < 6
-    vtk_transformator->SetInput (vtk_model);
-#else
     vtk_transformator->SetInputData (vtk_model);
-#endif
     vtk_transformator->Update ();
 
     // Visualize
     vtkSmartPointer<vtkActor> vtk_actor = vtkSmartPointer<vtkActor>::New();
     vtkSmartPointer<vtkPolyDataMapper> vtk_mapper = vtkSmartPointer<vtkPolyDataMapper>::New ();
-#if VTK_MAJOR_VERSION < 6
-    vtk_mapper->SetInput(vtk_transformator->GetOutput ());
-#else
     vtk_mapper->SetInputData (vtk_transformator->GetOutput ());
-#endif
     vtk_actor->SetMapper(vtk_mapper);
     // Set the appearance & add to the renderer
     vtk_actor->GetProperty ()->SetColor (0.6, 0.7, 0.9);
@@ -325,7 +317,7 @@ loadScene (const char* file_name, PointCloud<PointXYZ>& non_plane_points, PointC
   PointCloud<Normal>::Ptr all_normals (new PointCloud<Normal> ());
 
   // Get the points and normals from the input scene
-  if ( !vtk2PointCloud (file_name, *all_points, *all_normals, NULL) )
+  if ( !vtk2PointCloud (file_name, *all_points, *all_normals, nullptr) )
     return false;
 
   // Detect the largest plane and remove it from the sets
@@ -343,7 +335,7 @@ loadScene (const char* file_name, PointCloud<PointXYZ>& non_plane_points, PointC
   seg.setInputCloud (all_points);
   seg.segment (*inliers, *coefficients);
 
-  if (inliers->indices.size () == 0)
+  if (inliers->indices.empty ())
   {
     PCL_ERROR ("Could not estimate a planar model for the given dataset.");
     return false;
@@ -356,30 +348,28 @@ loadScene (const char* file_name, PointCloud<PointXYZ>& non_plane_points, PointC
 
   // Make sure that the ids are sorted
   sort (inliers->indices.begin (), inliers->indices.end ());
-  size_t i, j, id;
-
-  for ( i = 0, j = 0, id = 0 ; i < inliers->indices.size () ; )
+  std::size_t j = 0;
+  for ( std::size_t i = 0, id = 0 ; i < inliers->indices.size () ; )
   {
     if ( static_cast<int> (id) == inliers->indices[i] )
     {
-      plane_points.points[i] = all_points->points[id];
-      ++id;
+      plane_points[i] = (*all_points)[id];
       ++i;
     }
     else
     {
-      non_plane_points.points[j] = all_points->points[id];
-      non_plane_normals.points[j] = all_normals->points[id];
-      ++id;
+      non_plane_points[j] = (*all_points)[id];
+      non_plane_normals[j] = (*all_normals)[id];
       ++j;
     }
+    ++id;
   }
 
   // Just copy the rest of the non-plane points
-  for ( ; id < all_points->size () ; ++id, ++j )
+  for ( std::size_t id = inliers->indices.size (); id < all_points->size () ; ++id, ++j )
   {
-    non_plane_points.points[j] = all_points->points[id];
-    non_plane_normals.points[j] = all_normals->points[id];
+    non_plane_points[j] = (*all_points)[id];
+    non_plane_normals[j] = (*all_normals)[id];
   }
 
   return true;
@@ -390,7 +380,7 @@ loadScene (const char* file_name, PointCloud<PointXYZ>& non_plane_points, PointC
 bool
 vtk2PointCloud (const char* file_name, PointCloud<PointXYZ>& pcl_points, PointCloud<Normal>& pcl_normals, vtkPolyData* vtk_data)
 {
-  size_t len = strlen (file_name);
+  std::size_t len = strlen (file_name);
   if ( file_name[len-3] != 'v' || file_name[len-2] != 't' || file_name[len-1] != 'k' )
   {
     fprintf (stderr, "ERROR: we need a .vtk object!\n");

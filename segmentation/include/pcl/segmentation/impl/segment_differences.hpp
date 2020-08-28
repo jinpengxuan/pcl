@@ -35,57 +35,53 @@
  *
  */
 
-#ifndef PCL_SEGMENTATION_IMPL_SEGMENT_DIFFERENCES_H_
-#define PCL_SEGMENTATION_IMPL_SEGMENT_DIFFERENCES_H_
+#pragma once
 
 #include <pcl/segmentation/segment_differences.h>
+
 #include <pcl/common/io.h>
+#include <pcl/common/point_tests.h> // for pcl::isFinite
+#include <pcl/search/organized.h> // for OrganizedNeighbor
+#include <pcl/search/kdtree.h> // for KdTree
+
 
 //////////////////////////////////////////////////////////////////////////
 template <typename PointT> void
 pcl::getPointCloudDifference (
-    const pcl::PointCloud<PointT> &src, 
-    const pcl::PointCloud<PointT> &, 
-    double threshold, const boost::shared_ptr<pcl::search::Search<PointT> > &tree,
+    const pcl::PointCloud<PointT> &src,
+    double threshold,
+    const typename pcl::search::Search<PointT>::Ptr &tree,
     pcl::PointCloud<PointT> &output)
 {
   // We're interested in a single nearest neighbor only
   std::vector<int> nn_indices (1);
   std::vector<float> nn_distances (1);
 
-  // The src indices that do not have a neighbor in tgt
+  // The input cloud indices that do not have a neighbor in the target cloud
   std::vector<int> src_indices;
 
   // Iterate through the source data set
-  for (int i = 0; i < static_cast<int> (src.points.size ()); ++i)
+  for (int i = 0; i < static_cast<int> (src.size ()); ++i)
   {
-    if (!isFinite (src.points[i]))
+    // Ignore invalid points in the inpout cloud
+    if (!isFinite (src[i]))
       continue;
     // Search for the closest point in the target data set (number of neighbors to find = 1)
-    if (!tree->nearestKSearch (src.points[i], 1, nn_indices, nn_distances))
+    if (!tree->nearestKSearch (src[i], 1, nn_indices, nn_distances))
     {
-      PCL_WARN ("No neighbor found for point %lu (%f %f %f)!\n", i, src.points[i].x, src.points[i].y, src.points[i].z);
+      PCL_WARN ("No neighbor found for point %lu (%f %f %f)!\n", i, src[i].x, src[i].y, src[i].z);
       continue;
     }
-
+    // Add points without a corresponding point in the target cloud to the output cloud
     if (nn_distances[0] > threshold)
       src_indices.push_back (i);
   }
- 
-  // Allocate enough space and copy the basics
-  output.points.resize (src_indices.size ());
-  output.header   = src.header;
-  output.width    = static_cast<uint32_t> (src_indices.size ());
-  output.height   = 1;
-  //if (src.is_dense)
-    output.is_dense = true;
-  //else
-    // It's not necessarily true that is_dense is false if cloud_in.is_dense is false
-    // To verify this, we would need to iterate over all points and check for NaNs
-    //output.is_dense = false;
 
   // Copy all the data fields from the input cloud to the output one
   copyPointCloud (src, src_indices, output);
+
+  // Output is always dense, as invalid points in the input cloud are ignored
+  output.is_dense = true;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -121,13 +117,11 @@ pcl::SegmentDifferences<PointT>::segment (PointCloud &output)
   // Send the input dataset to the spatial locator
   tree_->setInputCloud (target_);
 
-  getPointCloudDifference (*input_, *target_, distance_threshold_, tree_, output);
+  getPointCloudDifference (*input_, distance_threshold_, tree_, output);
 
   deinitCompute ();
 }
 
 #define PCL_INSTANTIATE_SegmentDifferences(T) template class PCL_EXPORTS pcl::SegmentDifferences<T>;
-#define PCL_INSTANTIATE_getPointCloudDifference(T) template PCL_EXPORTS void pcl::getPointCloudDifference<T>(const pcl::PointCloud<T> &, const pcl::PointCloud<T> &, double, const boost::shared_ptr<pcl::search::Search<T> > &, pcl::PointCloud<T> &);
-
-#endif        // PCL_SEGMENTATION_IMPL_SEGMENT_DIFFERENCES_H_
+#define PCL_INSTANTIATE_getPointCloudDifference(T) template PCL_EXPORTS void pcl::getPointCloudDifference<T>(const pcl::PointCloud<T> &, double, const typename pcl::search::Search<T>::Ptr &, pcl::PointCloud<T> &);
 

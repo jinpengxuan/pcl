@@ -34,8 +34,7 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef PCL_RECOGNITION_OCCLUSION_REASONING_H_
-#define PCL_RECOGNITION_OCCLUSION_REASONING_H_
+#pragma once
 
 #include <pcl/common/common.h>
 #include <pcl/common/transforms.h>
@@ -80,14 +79,14 @@ namespace pcl
       typename pcl::PointCloud<ModelT>::Ptr filtered (new pcl::PointCloud<ModelT> ());
 
       std::vector<int> indices_to_keep;
-      indices_to_keep.resize (to_be_filtered->points.size ());
+      indices_to_keep.resize (to_be_filtered->size ());
 
       int keep = 0;
-      for (size_t i = 0; i < to_be_filtered->points.size (); i++)
+      for (std::size_t i = 0; i < to_be_filtered->size (); i++)
       {
-        float x = to_be_filtered->points[i].x;
-        float y = to_be_filtered->points[i].y;
-        float z = to_be_filtered->points[i].z;
+        float x = (*to_be_filtered)[i].x;
+        float y = (*to_be_filtered)[i].y;
+        float z = (*to_be_filtered)[i].z;
         int u = static_cast<int> (f * x / z + cx);
         int v = static_cast<int> (f * y / z + cy);
 
@@ -96,8 +95,8 @@ namespace pcl
           continue;
 
         //Check for invalid depth
-        if (!pcl_isfinite (organized_cloud->at (u, v).x) || !pcl_isfinite (organized_cloud->at (u, v).y)
-            || !pcl_isfinite (organized_cloud->at (u, v).z))
+        if (!std::isfinite (organized_cloud->at (u, v).x) || !std::isfinite (organized_cloud->at (u, v).y)
+            || !std::isfinite (organized_cloud->at (u, v).z))
           continue;
 
         float z_oc = organized_cloud->at (u, v).z;
@@ -124,14 +123,14 @@ namespace pcl
       typename pcl::PointCloud<ModelT>::Ptr filtered (new pcl::PointCloud<ModelT> ());
 
       std::vector<int> indices_to_keep;
-      indices_to_keep.resize (to_be_filtered->points.size ());
+      indices_to_keep.resize (to_be_filtered->size ());
 
       int keep = 0;
-      for (size_t i = 0; i < to_be_filtered->points.size (); i++)
+      for (std::size_t i = 0; i < to_be_filtered->size (); i++)
       {
-        float x = to_be_filtered->points[i].x;
-        float y = to_be_filtered->points[i].y;
-        float z = to_be_filtered->points[i].z;
+        float x = (*to_be_filtered)[i].x;
+        float y = (*to_be_filtered)[i].y;
+        float z = (*to_be_filtered)[i].z;
         int u = static_cast<int> (f * x / z + cx);
         int v = static_cast<int> (f * y / z + cy);
 
@@ -142,8 +141,8 @@ namespace pcl
         //Check for invalid depth
         if (check_invalid_depth)
         {
-          if (!pcl_isfinite (organized_cloud->at (u, v).x) || !pcl_isfinite (organized_cloud->at (u, v).y)
-              || !pcl_isfinite (organized_cloud->at (u, v).z))
+          if (!std::isfinite (organized_cloud->at (u, v).x) || !std::isfinite (organized_cloud->at (u, v).y)
+              || !std::isfinite (organized_cloud->at (u, v).z))
             continue;
         }
 
@@ -171,14 +170,14 @@ namespace pcl
       typename pcl::PointCloud<ModelT>::Ptr filtered (new pcl::PointCloud<ModelT> ());
 
       std::vector<int> indices_to_keep;
-      indices_to_keep.resize (to_be_filtered->points.size ());
+      indices_to_keep.resize (to_be_filtered->size ());
 
       int keep = 0;
-      for (size_t i = 0; i < to_be_filtered->points.size (); i++)
+      for (std::size_t i = 0; i < to_be_filtered->size (); i++)
       {
-        float x = to_be_filtered->points[i].x;
-        float y = to_be_filtered->points[i].y;
-        float z = to_be_filtered->points[i].z;
+        float x = (*to_be_filtered)[i].x;
+        float y = (*to_be_filtered)[i].y;
+        float z = (*to_be_filtered)[i].z;
         int u = static_cast<int> (f * x / z + cx);
         int v = static_cast<int> (f * y / z + cy);
 
@@ -189,8 +188,8 @@ namespace pcl
         //Check for invalid depth
         if (check_invalid_depth)
         {
-          if (!pcl_isfinite (organized_cloud->at (u, v).x) || !pcl_isfinite (organized_cloud->at (u, v).y)
-              || !pcl_isfinite (organized_cloud->at (u, v).z))
+          if (!std::isfinite (organized_cloud->at (u, v).x) || !std::isfinite (organized_cloud->at (u, v).y)
+              || !std::isfinite (organized_cloud->at (u, v).z))
             continue;
         }
 
@@ -214,5 +213,3 @@ namespace pcl
 #ifdef PCL_NO_PRECOMPILE
 #include <pcl/recognition/impl/hv/occlusion_reasoning.hpp>
 #endif
-
-#endif /* PCL_RECOGNITION_OCCLUSION_REASONING_H_ */

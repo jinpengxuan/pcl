@@ -103,13 +103,13 @@ pcl::io::saveRgbPNGFile (const std::string& file_name, const unsigned char *rgb_
 void
 pcl::io::savePNGFile (const std::string& file_name, const pcl::PointCloud<unsigned char>& cloud)
 {
-  saveCharPNGFile(file_name, &cloud.points[0], cloud.width, cloud.height, 1);
+  saveCharPNGFile(file_name, &cloud[0], cloud.width, cloud.height, 1);
 }
 
 void
 pcl::io::savePNGFile (const std::string& file_name, const pcl::PointCloud<unsigned short>& cloud)
 {
-  saveShortPNGFile(file_name, &cloud.points[0], cloud.width, cloud.height, 1);
+  saveShortPNGFile(file_name, &cloud[0], cloud.width, cloud.height, 1);
 }
 
 void
@@ -132,15 +132,3 @@ pcl::io::savePNGFile (const std::string& file_name, const pcl::PCLImage& image)
         PCL_ERROR ("[pcl::io::savePNGFile] Unsupported image encoding \"%s\".\n", image.encoding.c_str ());
     }
 }
-
-void
-pcl::io::savePNGFile (const std::string& file_name, const pcl::PointCloud<pcl::PointXYZL>& cloud)
-{
-	std::vector<unsigned short> data(cloud.width * cloud.height);
-	for (size_t i = 0; i < cloud.points.size (); ++i)
-	{
-		data[i] = static_cast<unsigned short> (cloud.points[i].label);      
-	}
-	saveShortPNGFile(file_name, &data[0], cloud.width, cloud.height,1);
-}
-

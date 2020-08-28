@@ -53,16 +53,16 @@ pcl::MomentInvariantsEstimation<PointInT, PointOutT>::computePointMomentInvarian
   // Estimate the XYZ centroid
   compute3DCentroid (cloud, indices, xyz_centroid_);
 
-  // Initalize the centralized moments
+  // Initialize the centralized moments
   float mu200 = 0, mu020 = 0, mu002 = 0, mu110 = 0, mu101 = 0, mu011  = 0;
 
   // Iterate over the nearest neighbors set
-  for (size_t nn_idx = 0; nn_idx < indices.size (); ++nn_idx)
+  for (const int &index : indices)
   {
     // Demean the points
-    temp_pt_[0] = cloud.points[indices[nn_idx]].x - xyz_centroid_[0];
-    temp_pt_[1] = cloud.points[indices[nn_idx]].y - xyz_centroid_[1];
-    temp_pt_[2] = cloud.points[indices[nn_idx]].z - xyz_centroid_[2];
+    temp_pt_[0] = cloud[index].x - xyz_centroid_[0];
+    temp_pt_[1] = cloud[index].y - xyz_centroid_[1];
+    temp_pt_[2] = cloud[index].z - xyz_centroid_[2];
 
     mu200 += temp_pt_[0] * temp_pt_[0];
     mu020 += temp_pt_[1] * temp_pt_[1];
@@ -86,16 +86,16 @@ pcl::MomentInvariantsEstimation<PointInT, PointOutT>::computePointMomentInvarian
   // Estimate the XYZ centroid
   compute3DCentroid (cloud, xyz_centroid_);
 
-  // Initalize the centralized moments
+  // Initialize the centralized moments
   float mu200 = 0, mu020 = 0, mu002 = 0, mu110 = 0, mu101 = 0, mu011  = 0;
 
   // Iterate over the nearest neighbors set
-  for (size_t nn_idx = 0; nn_idx < cloud.points.size (); ++nn_idx )
+  for (const auto& point: cloud.points)
   {
     // Demean the points
-    temp_pt_[0] = cloud.points[nn_idx].x - xyz_centroid_[0];
-    temp_pt_[1] = cloud.points[nn_idx].y - xyz_centroid_[1];
-    temp_pt_[2] = cloud.points[nn_idx].z - xyz_centroid_[2];
+    temp_pt_[0] = point.x - xyz_centroid_[0];
+    temp_pt_[1] = point.y - xyz_centroid_[1];
+    temp_pt_[2] = point.z - xyz_centroid_[2];
 
     mu200 += temp_pt_[0] * temp_pt_[0];
     mu020 += temp_pt_[1] * temp_pt_[1];
@@ -125,34 +125,34 @@ pcl::MomentInvariantsEstimation<PointInT, PointOutT>::computeFeature (PointCloud
   if (input_->is_dense)
   {
     // Iterating over the entire index vector
-    for (size_t idx = 0; idx < indices_->size (); ++idx)
+    for (std::size_t idx = 0; idx < indices_->size (); ++idx)
     {
       if (this->searchForNeighbors ((*indices_)[idx], search_parameter_, nn_indices, nn_dists) == 0)
       {
-        output.points[idx].j1 = output.points[idx].j2 = output.points[idx].j3 = std::numeric_limits<float>::quiet_NaN ();
+        output[idx].j1 = output[idx].j2 = output[idx].j3 = std::numeric_limits<float>::quiet_NaN ();
         output.is_dense = false;
         continue;
       }
      
       computePointMomentInvariants (*surface_, nn_indices,
-                                    output.points[idx].j1, output.points[idx].j2, output.points[idx].j3);
+                                    output[idx].j1, output[idx].j2, output[idx].j3);
     }
   }
   else
   {
     // Iterating over the entire index vector
-    for (size_t idx = 0; idx < indices_->size (); ++idx)
+    for (std::size_t idx = 0; idx < indices_->size (); ++idx)
     {
       if (!isFinite ((*input_)[(*indices_)[idx]]) ||
           this->searchForNeighbors ((*indices_)[idx], search_parameter_, nn_indices, nn_dists) == 0)
       {
-        output.points[idx].j1 = output.points[idx].j2 = output.points[idx].j3 = std::numeric_limits<float>::quiet_NaN ();
+        output[idx].j1 = output[idx].j2 = output[idx].j3 = std::numeric_limits<float>::quiet_NaN ();
         output.is_dense = false;
         continue;
       }
 
       computePointMomentInvariants (*surface_, nn_indices,
-                                    output.points[idx].j1, output.points[idx].j2, output.points[idx].j3);
+                                    output[idx].j1, output[idx].j2, output[idx].j3);
     }
   }
 }

@@ -45,15 +45,14 @@
 #include <pcl/console/time.h>
 #include <pcl/filters/morphological_filter.h>
 
-using namespace std;
 using namespace pcl;
 using namespace pcl::io;
 using namespace pcl::console;
 
 
-typedef PointXYZ PointType;
-typedef PointCloud<PointXYZ> Cloud;
-typedef const Cloud::ConstPtr ConstCloudPtr;
+using PointType = PointXYZ;
+using Cloud = PointCloud<PointXYZ>;
+using ConstCloudPtr = const Cloud::ConstPtr;
 
 std::string default_method = "open";
 float default_resolution = 1.0f;
@@ -135,15 +134,15 @@ saveCloud (const std::string &filename, const Cloud &output)
 }
 
 int
-batchProcess (const vector<string> &pcd_files, string &output_dir,
-              float resolution, std::string method)
+batchProcess (const std::vector<std::string> &pcd_files, std::string &output_dir,
+              float resolution, const std::string &method)
 {
-  vector<string> st;
-  for (size_t i = 0; i < pcd_files.size (); ++i)
+  std::vector<std::string> st;
+  for (const auto &pcd_file : pcd_files)
   {
     // Load the first file
     Cloud::Ptr cloud (new Cloud);
-    if (!loadCloud (pcd_files[i], *cloud))
+    if (!loadCloud (pcd_file, *cloud))
       return (-1);
 
     // Perform the feature estimation
@@ -151,12 +150,12 @@ batchProcess (const vector<string> &pcd_files, string &output_dir,
     compute (cloud, output, resolution, method);
 
     // Prepare output file name
-    string filename = pcd_files[i];
+    std::string filename = pcd_file;
     boost::trim (filename);
     boost::split (st, filename, boost::is_any_of ("/\\"), boost::token_compress_on);
 
     // Save into the second file
-    stringstream ss;
+    std::stringstream ss;
     ss << output_dir << "/" << st.at (st.size () - 1);
     saveCloud (ss.str (), output);
   }
@@ -183,7 +182,7 @@ main (int argc, char** argv)
   float resolution = default_resolution;
   parse_argument (argc, argv, "-method", method);
   parse_argument (argc, argv, "-resolution", resolution);
-  string input_dir, output_dir;
+  std::string input_dir, output_dir;
   if (parse_argument (argc, argv, "-input_dir", input_dir) != -1)
   {
     PCL_INFO ("Input directory given as %s. Batch process mode on.\n", input_dir.c_str ());
@@ -222,9 +221,9 @@ main (int argc, char** argv)
   }
   else
   {
-    if (input_dir != "" && boost::filesystem::exists (input_dir))
+    if (!input_dir.empty() && boost::filesystem::exists (input_dir))
     {
-      vector<string> pcd_files;
+      std::vector<std::string> pcd_files;
       boost::filesystem::directory_iterator end_itr;
       for (boost::filesystem::directory_iterator itr (input_dir); itr != end_itr; ++itr)
       {

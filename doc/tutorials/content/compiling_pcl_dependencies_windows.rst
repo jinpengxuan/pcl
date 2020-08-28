@@ -59,7 +59,7 @@ compile a series of 3rd party library dependencies:
 .. note::
   
    Though not a dependency per se, don't forget that you also need the CMake
-   build system (http://www.cmake.org/), at least version **2.8.3**. A Git
+   build system (http://www.cmake.org/), at least version **3.5.0**. A Git
    client for Windows is also required to download the PCL source code.
    
 Building dependencies
@@ -95,7 +95,7 @@ like::
         Where to build binaries: C:/PCL_dependencies/boost-cmake/build
 
     Before clicking on "Configure", click on "Add Entry" button in the top right of CMake gui, in 
-    the popup window, fill the fiels as follows::
+    the popup window, fill the fields as follows::
 
         Name  : LIBPREFIX
         Type  : STRING       
@@ -135,7 +135,7 @@ like::
     then fill the **BUILD_PROJECTS** CMake entry (which is set to `ALL` by default) with a semicolon-seperated 
     list of boost modules::
     
-      BUILD_PROJECTS : system;filesystem;date_time;thread;iostreams;tr1;serialization
+      BUILD_PROJECTS : system;filesystem;date_time;iostreams;tr1;serialization
       
     Also, uncheck the **ENABLE_STATIC_RUNTIME** checkbox. Then, click "Configure" again. If you get some 
     errors related to Python, then uncheck **WITH_PYTHON** checkbox, and click "Configure" again. 
@@ -144,14 +144,13 @@ like::
       Reading boost project directories (per BUILD_PROJECTS) 
       
       + date_time
-      + thread
       + serialization
       + system
       + filesystem
       +-- optional python bindings disabled since PYTHON_FOUND is false. 
       + tr1
 
-    Now, click "Generate". A Visual Studio solution file will be genrated inside the build folder 
+    Now, click "Generate". A Visual Studio solution file will be generated inside the build folder 
     (e.g. C:/PCL_dependencies/boost-cmake/build). Open the `Boost.sln` file, then right click on 
     `INSTALL` project and choose `Build`. The `INSTALL`project will trigger the build of all the projects 
     in the solution file, and then will install the build libraries along with the header files to the default
@@ -177,7 +176,7 @@ like::
         Where to build binaries: C:/PCL_dependencies/flann-1.7.1-src/build
 
     Hit the "Configure" button. Proceed and be sure to choose the correct "Generator" on the next window. 
-    You can safley ignore any warning message about hdf5.    
+    You can safely ignore any warning message about hdf5.    
 
     Now, on my machine I had to manually set the `BUILD_PYTHON_BINDINGS`
     and `BUILD_MATLAB_BINDINGS` to OFF otherwise it would not continue to the next
@@ -210,7 +209,7 @@ like::
       Where to build binaries: C:/PCL_dependencies/qhull-2011.1/build
       
     Before clicking on "Configure", click on "Add Entry" button in the top right of CMake gui, in 
-    the popup window, fill the fiels as follows::
+    the popup window, fill the fields as follows::
 
       Name  : CMAKE_DEBUG_POSTFIX
       Type  : STRING       
@@ -282,7 +281,7 @@ like::
 
 - **GTest** : 
       
-    In case you want PCL tests (not recommanded for users), you need to compile the `googletest` library (GTest). 
+    In case you want PCL tests (not recommended for users), you need to compile the `googletest` library (GTest). 
     Setup the CMake fields as usual::
 
       Where is my source code: C:/PCL_dependencies/gtest-1.6.0

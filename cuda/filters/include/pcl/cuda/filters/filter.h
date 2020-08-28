@@ -33,8 +33,7 @@
  *
  */
 
-#ifndef PCL_CUDA_FILTER_H_
-#define PCL_CUDA_FILTER_H_
+#pragma once
 
 #include <pcl_cuda/pcl_cuda_base.h>
 #include <float.h>
@@ -44,7 +43,7 @@ namespace pcl_cuda
   /** \brief Removes points with x, y, or z equal to NaN
     * \param cloud_in the input point cloud
     * \param cloud_out the input point cloud
-    * \param index the mapping (ordered): cloud_out.points[i] = cloud_in.points[index[i]]
+    * \param index the mapping (ordered): cloud_out[i] = cloud_in[index[i]]
     * \note The density of the point cloud is lost.
     * \note Can be called with cloud_in == cloud_out
     */
@@ -64,9 +63,9 @@ namespace pcl_cuda
     public:
       using PCLCUDABase<CloudT>::input_;
 
-      typedef typename PCLCUDABase<CloudT>::PointCloud PointCloud;
-      typedef typename PointCloud::Ptr PointCloudPtr;
-      typedef typename PointCloud::ConstPtr PointCloudConstPtr;
+      using PointCloud = typename PCLCUDABase<CloudT>::PointCloud;
+      using PointCloudPtr = typename PointCloud::Ptr;
+      using PointCloudConstPtr = typename PointCloud::ConstPtr;
 
       /** \brief Empty constructor. */
       Filter () : filter_field_name_ (""), 
@@ -176,5 +175,3 @@ namespace pcl_cuda
       getClassName () const { return (filter_name_); }
   };
 }
-
-#endif  //#ifndef PCL_FILTER_H_

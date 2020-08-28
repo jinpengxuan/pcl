@@ -38,13 +38,11 @@
  *
  */
 
-#ifndef PCL_REGISTRATION_CORRESPONDENCE_REJECTION_H_
-#define PCL_REGISTRATION_CORRESPONDENCE_REJECTION_H_
+#pragma once
 
 #include <pcl/registration/correspondence_types.h>
 #include <pcl/registration/correspondence_sorting.h>
 #include <pcl/console/print.h>
-#include <pcl/common/transforms.h>
 #include <pcl/point_cloud.h>
 #include <pcl/search/kdtree.h>
 
@@ -59,20 +57,18 @@ namespace pcl
     class CorrespondenceRejector
     {
       public:
-        typedef boost::shared_ptr<CorrespondenceRejector> Ptr;
-        typedef boost::shared_ptr<const CorrespondenceRejector> ConstPtr;
+        using Ptr = shared_ptr<CorrespondenceRejector>;
+        using ConstPtr = shared_ptr<const CorrespondenceRejector>;
 
         /** \brief Empty constructor. */
         CorrespondenceRejector () 
-          : rejection_name_ ()
-          , input_correspondences_ () 
         {}
 
         /** \brief Empty destructor. */
         virtual ~CorrespondenceRejector () {}
 
         /** \brief Provide a pointer to the vector of the input correspondences.
-          * \param[in] correspondences the const boost shared pointer to a correspondence vector
+          * \param[in] correspondences the const shared pointer to a correspondence vector
           */
         virtual inline void 
         setInputCorrespondences (const CorrespondencesConstPtr &correspondences) 
@@ -81,7 +77,7 @@ namespace pcl
         };
 
         /** \brief Get a pointer to the vector of the input correspondences.
-          * \return correspondences the const boost shared pointer to a correspondence vector
+          * \return correspondences the const shared pointer to a correspondence vector
           */
         inline CorrespondencesConstPtr 
         getInputCorrespondences () { return input_correspondences_; };
@@ -202,7 +198,10 @@ namespace pcl
     class DataContainerInterface
     {
       public:
-        virtual ~DataContainerInterface () {}
+        using Ptr = shared_ptr<DataContainerInterface>;
+        using ConstPtr = shared_ptr<const DataContainerInterface>;
+
+        virtual ~DataContainerInterface () = default;
         virtual double getCorrespondenceScore (int index) = 0;
         virtual double getCorrespondenceScore (const pcl::Correspondence &) = 0;
         virtual double getCorrespondenceScoreFromNormals (const pcl::Correspondence &) = 0;
@@ -215,15 +214,15 @@ namespace pcl
     template <typename PointT, typename NormalT = pcl::PointNormal>
     class DataContainer : public DataContainerInterface
     {
-      typedef pcl::PointCloud<PointT> PointCloud;
-      typedef typename PointCloud::Ptr PointCloudPtr;
-      typedef typename PointCloud::ConstPtr PointCloudConstPtr;
+      using PointCloud = pcl::PointCloud<PointT>;
+      using PointCloudPtr = typename PointCloud::Ptr;
+      using PointCloudConstPtr = typename PointCloud::ConstPtr;
 
-      typedef typename pcl::search::KdTree<PointT>::Ptr KdTreePtr;
+      using KdTreePtr = typename pcl::search::KdTree<PointT>::Ptr;
       
-      typedef pcl::PointCloud<NormalT> Normals;
-      typedef typename Normals::Ptr NormalsPtr;
-      typedef typename Normals::ConstPtr NormalsConstPtr;
+      using Normals = pcl::PointCloud<NormalT>;
+      using NormalsPtr = typename Normals::Ptr;
+      using NormalsConstPtr = typename Normals::ConstPtr;
 
       public:
 
@@ -244,20 +243,7 @@ namespace pcl
         }
       
         /** \brief Empty destructor */
-        virtual ~DataContainer () {}
-
-        /** \brief Provide a source point cloud dataset (must contain XYZ
-          * data!), used to compute the correspondence distance.  
-          * \param[in] cloud a cloud containing XYZ data
-          */
-        PCL_DEPRECATED ("[pcl::registration::DataContainer::setInputCloud] setInputCloud is deprecated. Please use setInputSource instead.")
-        void
-        setInputCloud (const PointCloudConstPtr &cloud);
-
-        /** \brief Get a pointer to the input point cloud dataset target. */
-        PCL_DEPRECATED ("[pcl::registration::DataContainer::getInputCloud] getInputCloud is deprecated. Please use getInputSource instead.")
-        PointCloudConstPtr const
-        getInputCloud ();
+        ~DataContainer () {}
 
         /** \brief Provide a source point cloud dataset (must contain XYZ
           * data!), used to compute the correspondence distance.  
@@ -331,7 +317,7 @@ namespace pcl
           * \param[in] index index of the point in the input cloud
           */
         inline double 
-        getCorrespondenceScore (int index)
+        getCorrespondenceScore (int index) override
         {
           if ( target_cloud_updated_ && !force_no_recompute_ )
           {
@@ -339,37 +325,36 @@ namespace pcl
           }
           std::vector<int> indices (1);
           std::vector<float> distances (1);
-          if (tree_->nearestKSearch (input_->points[index], 1, indices, distances))
+          if (tree_->nearestKSearch ((*input_)[index], 1, indices, distances))
             return (distances[0]);
-          else
-            return (std::numeric_limits<double>::max ());
+          return (std::numeric_limits<double>::max ());
         }
 
         /** \brief Get the correspondence score for a given pair of correspondent points
           * \param[in] corr Correspondent points
           */
         inline double 
-        getCorrespondenceScore (const pcl::Correspondence &corr)
+        getCorrespondenceScore (const pcl::Correspondence &corr) override
         {
           // Get the source and the target feature from the list
-          const PointT &src = input_->points[corr.index_query];
-          const PointT &tgt = target_->points[corr.index_match];
+          const PointT &src = (*input_)[corr.index_query];
+          const PointT &tgt = (*target_)[corr.index_match];
 
           return ((src.getVector4fMap () - tgt.getVector4fMap ()).squaredNorm ());
         }
         
         /** \brief Get the correspondence score for a given pair of correspondent points based on 
-          * the angle betweeen the normals. The normmals for the in put and target clouds must be 
+          * the angle between the normals. The normmals for the in put and target clouds must be 
           * set before using this function
           * \param[in] corr Correspondent points
           */
         inline double
-        getCorrespondenceScoreFromNormals (const pcl::Correspondence &corr)
+        getCorrespondenceScoreFromNormals (const pcl::Correspondence &corr) override
         {
-          //assert ( (input_normals_->points.size () != 0) && (target_normals_->points.size () != 0) && "Normals are not set for the input and target point clouds");
+          //assert ( (input_normals_->size () != 0) && (target_normals_->size () != 0) && "Normals are not set for the input and target point clouds");
           assert (input_normals_ && target_normals_ && "Normals are not set for the input and target point clouds");
-          const NormalT &src = input_normals_->points[corr.index_query];
-          const NormalT &tgt = target_normals_->points[corr.index_match];
+          const NormalT &src = (*input_normals_)[corr.index_query];
+          const NormalT &tgt = (*target_normals_)[corr.index_match];
           return (double ((src.normal[0] * tgt.normal[0]) + (src.normal[1] * tgt.normal[1]) + (src.normal[2] * tgt.normal[2])));
         }
 
@@ -417,8 +402,3 @@ namespace pcl
     };
   }
 }
-
-#include <pcl/registration/impl/correspondence_rejection.hpp>
-
-#endif /* PCL_REGISTRATION_CORRESPONDENCE_REJECTION_H_ */
-

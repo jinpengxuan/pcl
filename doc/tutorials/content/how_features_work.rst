@@ -45,7 +45,7 @@ In general, PCL features use approximate methods to compute the nearest neighbor
 Terminology
 -----------
 
-For the reminder of this article, we will make certain abbreviations and
+For the remainder of this article, we will make certain abbreviations and
 introduce certain notations, to simplify the in-text explanations. Please see
 the table below for a reference on each of the terms used.
 
@@ -54,13 +54,13 @@ the table below for a reference on each of the terms used.
 +=============+================================================+
 | Foo         | a class named `Foo`                            |
 +-------------+------------------------------------------------+
-| FooPtr      | a boost shared pointer to a class `Foo`,       |
+| FooPtr      | a shared pointer to a class `Foo`,       |
 |             |                                                | 
-|             | e.g., `boost::shared_ptr<Foo>`                 |
+|             | e.g., `shared_ptr<Foo>`                 |
 +-------------+------------------------------------------------+
-| FooConstPtr | a const boost shared pointer to a class `Foo`, |
+| FooConstPtr | a const shared pointer to a class `Foo`, |
 |             |                                                |
-|             | e.g., `const boost::shared_ptr<const Foo>`     |
+|             | e.g., `const shared_ptr<const Foo>`     |
 +-------------+------------------------------------------------+
 
 How to pass the input
@@ -71,7 +71,7 @@ the `pcl::Feature` class accepts input data in two different ways:
 
  1. an entire point cloud dataset, given via **setInputCloud (PointCloudConstPtr &)** - **mandatory**
 
-    Any feature estimation class with attempt to estimate a feature at **every** point in the given input cloud.
+    Any feature estimation class will attempt to estimate a feature at **every** point in the given input cloud.
 
  2. a subset of a point cloud dataset, given via **setInputCloud (PointCloudConstPtr &)** and **setIndices (IndicesConstPtr &)** - **optional**
 
@@ -102,7 +102,7 @@ Because **setInputCloud()** is always required, there are up to four combination
 
 * **setIndices() = true, setSearchSurface() = true** - this is probably the rarest case, where both indices and a search surface is given. In this case, features will be estimated for only a subset from the <input, indices> pair, using the search surface information given in **setSearchSurface()**.
 
-  Finally, un the figure above, this corresponds to the last (rightmost) case. Here, we assume that q_2's index is not part of the indices vector given for Q, so no neighbors or features will be estimated at q2.
+  Finally, in the figure above, this corresponds to the last (rightmost) case. Here, we assume that q_2's index is not part of the indices vector given for Q, so no neighbors or features will be estimated at q2.
 
 
 The most useful example when **setSearchSurface()** should be used, is when we have a very dense input dataset, but we do not want to estimate features at all the points in it, but rather at some keypoints discovered using the methods in `pcl_keypoints`, or at a downsampled version of the cloud (e.g., obtained using a `pcl::VoxelGrid<T>` filter). In this case, we pass the downsampled/keypoints input via **setInputCloud()**, and the original data as **setSearchSurface()**.
@@ -143,7 +143,7 @@ The following code snippet will estimate a set of surface normals for all the po
      // Compute the features
      ne.compute (*cloud_normals);
 
-     // cloud_normals->points.size () should have the same size as the input cloud->points.size ()
+     // cloud_normals->size () should have the same size as the input cloud->size ()
    }
 
 The following code snippet will estimate a set of surface normals for a subset of the points in the input dataset.
@@ -160,15 +160,15 @@ The following code snippet will estimate a set of surface normals for a subset o
      ... read, pass in or create a point cloud ...
 
      // Create a set of indices to be used. For simplicity, we're going to be using the first 10% of the points in cloud
-     std::vector<int> indices (floor (cloud->points.size () / 10));
-     for (size_t i = 0; indices.size (); ++i) indices[i] = i;
+     std::vector<int> indices (std::floor (cloud->size () / 10));
+     for (std::size_t i = 0; i < indices.size (); ++i) indices[i] = i;
 
      // Create the normal estimation class, and pass the input dataset to it
      pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
      ne.setInputCloud (cloud);
 
      // Pass the indices
-     boost::shared_ptr<std::vector<int> > indicesptr (new std::vector<int> (indices));
+     pcl::shared_ptr<std::vector<int> > indicesptr (new std::vector<int> (indices));
      ne.setIndices (indicesptr);
 
      // Create an empty kdtree representation, and pass it to the normal estimation object. 
@@ -185,7 +185,7 @@ The following code snippet will estimate a set of surface normals for a subset o
      // Compute the features
      ne.compute (*cloud_normals);
 
-     // cloud_normals->points.size () should have the same size as the input indicesptr->size ()
+     // cloud_normals->size () should have the same size as the input indicesptr->size ()
    }
 
 
@@ -226,10 +226,10 @@ Finally, the following code snippet will estimate a set of surface normals for a
      // Compute the features
      ne.compute (*cloud_normals);
 
-     // cloud_normals->points.size () should have the same size as the input cloud_downsampled->points.size ()
+     // cloud_normals->size () should have the same size as the input cloud_downsampled->size ()
    }
 
-.. [RusuDissertation] http://files.rbrusu.com/publications/RusuPhDThesis.pdf
+.. [RusuDissertation] http://mediatum.ub.tum.de/doc/800632/941254.pdf
 .. note::
     @PhDThesis{RusuDoctoralDissertation,
     author = {Radu Bogdan Rusu}, 

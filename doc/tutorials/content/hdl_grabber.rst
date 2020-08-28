@@ -6,7 +6,7 @@ The Velodyne High Definition LiDAR (HDL) Grabber
 The Velodyne HDL is a network-based 3D LiDAR system that produces
 360 degree point clouds containing over 700,000 points every second.
 
-The HDL Grabber provided in PCL mimicks other Grabbers, making it *almost*
+The HDL Grabber provided in PCL mimics other Grabbers, making it *almost*
 plug-and-play.  Because the HDL devices are network based, however, there
 are a few gotchas on some platforms.
 
@@ -47,7 +47,7 @@ PCAP Files
 `Wireshark <http://www.wireshark.org/>`_ is a popular Network Packet Analyzer Program which
 is available for most platforms, including Linux, MacOS and Windows.  This tool uses a defacto
 standard network packet capture file format called `PCAP <http://en.wikipedia.org/wiki/Pcap>`_.
-Many publically available Velodyne HDL packet captures use this PCAP file format as a means of
+Many publicly available Velodyne HDL packet captures use this PCAP file format as a means of
 recording and playback.  These PCAP files can be used with the HDL Grabber if PCL is compiled with
 PCAP support.
 
@@ -93,7 +93,6 @@ So let's look at the code. The following represents a simplified version of *vis
    #include <pcl/visualization/cloud_viewer.h>
    #include <pcl/console/parse.h>
 
-   using namespace std;
    using namespace pcl::console;
    using namespace pcl::visualization;
 
@@ -101,7 +100,7 @@ So let's look at the code. The following represents a simplified version of *vis
    {
      public:
        typedef pcl::PointCloud<pcl::PointXYZI> Cloud;
-       typedef typename Cloud::ConstPtr CloudConstPtr;
+       typedef Cloud::ConstPtr CloudConstPtr;
 
        SimpleHDLViewer (Grabber& grabber,
            pcl::visualization::PointCloudColorHandler<pcl::PointXYZI> &handler) :
@@ -113,7 +112,7 @@ So let's look at the code. The following represents a simplified version of *vis
 
        void cloud_callback (const CloudConstPtr& cloud)
        {
-         boost::mutex::scoped_lock lock (cloud_mutex_);
+         std::lock_guard<std::mutex> lock (cloud_mutex_);
          cloud_ = cloud;
        }
 
@@ -125,8 +124,8 @@ So let's look at the code. The following represents a simplified version of *vis
          cloud_viewer_->setCameraPosition (0.0, 0.0, 30.0, 0.0, 1.0, 0.0, 0);
          cloud_viewer_->setCameraClipDistances (0.0, 50.0);
 
-         boost::function<void (const CloudConstPtr&)> cloud_cb = boost::bind (
-             &SimpleHDLViewer::cloud_callback, this, _1);
+         std::function<void (const CloudConstPtr&)> cloud_cb =
+             [this] (const CloudConstPtr& cloud) { cloud_callback (cloud); };
          boost::signals2::connection cloud_connection = grabber_.registerCallback (
              cloud_cb);
 
@@ -163,10 +162,10 @@ So let's look at the code. The following represents a simplified version of *vis
          cloud_connection.disconnect ();
        }
 
-       boost::shared_ptr<pcl::visualization::PCLVisualizer> cloud_viewer_;
+       pcl::visualization::PCLVisualizer::Ptr cloud_viewer_;
 
        pcl::Grabber& grabber_;
-       boost::mutex cloud_mutex_;
+       std::mutex cloud_mutex_;
 
        CloudConstPtr cloud_;
        pcl::visualization::PointCloudColorHandler<pcl::PointXYZI> &handler_;
@@ -194,10 +193,10 @@ Additional Details
 
 The *HDL Grabber* offers more than one datatype, which is the reason we made
 the *Grabber* interface so generic, leading to the relatively complicated
-*boost::bind* line. In fact, we can register the following callback types as of
+lambda line. In fact, we can register the following callback types as of
 this writing:
 
-* `void (const boost::shared_ptr<const pcl::PointCloud<pcl::PointXYZRGB> >&)`
+* `void (const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr&)`
 
 Compiling and running the program
 ---------------------------------
@@ -231,7 +230,7 @@ is usually the broadcast network IP Address (eg, 255.255.255.255 for a global br
 x.y.z.255 for a Class C Network [where x.y.z are the first three octets of a Class C network, such as
 192.168.1]).
 
-The Source IP Address, on the otherhand, indicates where the packet originated from.  Packets
+The Source IP Address, on the other hand, indicates where the packet originated from.  Packets
 can be hand-crafted for spoofing-type attacks (eg, pretending to come from somewhere they really
 didn't). The Reverse Path Filter attempts to detect these instances.  The default rule that it uses is
 that if a packet is received on Network Interface *A*, then if there is no **route** to the **Source IP Address**

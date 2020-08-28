@@ -39,8 +39,8 @@
  * $Id$
  *
  */
-#ifndef PCL_COMMON_EIGEN_H_
-#define PCL_COMMON_EIGEN_H_
+
+#pragma once
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -52,17 +52,11 @@
 #  pragma disable_warn
 #endif
 
-#include <cmath>
 #include <pcl/ModelCoefficients.h>
 
 #include <Eigen/StdVector>
-#include <Eigen/Core>
-#include <Eigen/Eigenvalues>
 #include <Eigen/Geometry>
-#include <Eigen/SVD>
 #include <Eigen/LU>
-#include <Eigen/Dense>
-#include <Eigen/Eigenvalues>
 
 namespace pcl
 {
@@ -238,10 +232,10 @@ namespace pcl
     * \ingroup common
     */
   inline Eigen::Affine3f
-  getTransformationFromTwoUnitVectors (const Eigen::Vector3f& y_direction, 
+  getTransformationFromTwoUnitVectors (const Eigen::Vector3f& y_direction,
                                        const Eigen::Vector3f& z_axis);
 
-  /** \brief Get the transformation that will translate \a orign to (0,0,0) and rotate \a z_axis into (0,0,1)
+  /** \brief Get the transformation that will translate \a origin to (0,0,0) and rotate \a z_axis into (0,0,1)
     * and \a y_direction into a vector with x=0 (or into (0,1,0) should \a y_direction be orthogonal to \a z_axis)
     * \param[in] y_direction the y direction
     * \param[in] z_axis the z-axis
@@ -718,5 +712,3 @@ namespace pcl
 #if defined __SUNPRO_CC
 #  pragma enable_warn
 #endif
-
-#endif  //PCL_COMMON_EIGEN_H_

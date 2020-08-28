@@ -44,7 +44,6 @@
 #include <pcl/console/parse.h>
 #include <pcl/console/time.h>
 
-using namespace std;
 using namespace pcl;
 using namespace pcl::io;
 using namespace pcl::console;
@@ -73,7 +72,7 @@ printHelp (int, char **argv)
 }
 
 bool
-loadCloud (const string &filename, pcl::PCLPointCloud2 &cloud)
+loadCloud (const std::string &filename, pcl::PCLPointCloud2 &cloud)
 {
   TicToc tt;
   print_highlight ("Loading "); print_value ("%s ", filename.c_str ());
@@ -102,13 +101,13 @@ compute (const pcl::PCLPointCloud2::ConstPtr &input, pcl::PCLPointCloud2 &output
   tt.tic ();
 
   // Refine the plane indices
-  typedef SampleConsensusModelPlane<PointXYZ>::Ptr SampleConsensusModelPlanePtr;
+  using SampleConsensusModelPlanePtr = SampleConsensusModelPlane<PointXYZ>::Ptr;
   SampleConsensusModelPlanePtr model (new SampleConsensusModelPlane<PointXYZ> (xyz));
   RandomSampleConsensus<PointXYZ> sac (model, threshold);
   sac.setMaxIterations (max_iterations);
   bool res = sac.computeModel ();
   
-  vector<int> inliers;
+  std::vector<int> inliers;
   sac.getInliers (inliers);
   Eigen::VectorXf coefficients;
   sac.getModelCoefficients (coefficients);
@@ -142,7 +141,7 @@ compute (const pcl::PCLPointCloud2::ConstPtr &input, pcl::PCLPointCloud2 &output
                     inserter (everything_but_the_plane->indices, everything_but_the_plane->indices.begin ()));
 
     // Extract largest cluster minus the plane
-    vector<PointIndices> cluster_indices;
+    std::vector<PointIndices> cluster_indices;
     EuclideanClusterExtraction<PointXYZ> ec;
     ec.setClusterTolerance (0.02); // 2cm
     ec.setMinClusterSize (100);
@@ -162,7 +161,7 @@ compute (const pcl::PCLPointCloud2::ConstPtr &input, pcl::PCLPointCloud2 &output
 }
 
 void
-saveCloud (const string &filename, const pcl::PCLPointCloud2 &output)
+saveCloud (const std::string &filename, const pcl::PCLPointCloud2 &output)
 {
   TicToc tt;
   tt.tic ();
@@ -176,14 +175,14 @@ saveCloud (const string &filename, const pcl::PCLPointCloud2 &output)
 }
 
 int
-batchProcess (const vector<string> &pcd_files, string &output_dir, int max_it, double thresh, bool negative)
+batchProcess (const std::vector<std::string> &pcd_files, std::string &output_dir, int max_it, double thresh, bool negative)
 {
-  vector<string> st;
-  for (size_t i = 0; i < pcd_files.size (); ++i)
+  std::vector<std::string> st;
+  for (const auto &pcd_file : pcd_files)
   {
     // Load the first file
     pcl::PCLPointCloud2::Ptr cloud (new pcl::PCLPointCloud2);
-    if (!loadCloud (pcd_files[i], *cloud)) 
+    if (!loadCloud (pcd_file, *cloud)) 
       return (-1);
 
     // Perform the feature estimation
@@ -191,12 +190,12 @@ batchProcess (const vector<string> &pcd_files, string &output_dir, int max_it, d
     compute (cloud, output, max_it, thresh, negative);
 
     // Prepare output file name
-    string filename = pcd_files[i];
+    std::string filename = pcd_file;
     boost::trim (filename);
     boost::split (st, filename, boost::is_any_of ("/\\"), boost::token_compress_on);
     
     // Save into the second file
-    stringstream ss;
+    std::stringstream ss;
     ss << output_dir << "/" << st.at (st.size () - 1);
     saveCloud (ss.str (), output);
   }
@@ -234,7 +233,7 @@ main (int argc, char** argv)
   parse_argument (argc, argv, "-max_it", max_it);
   parse_argument (argc, argv, "-thresh", thresh);
   parse_argument (argc, argv, "-neg", negative);
-  string input_dir, output_dir;
+  std::string input_dir, output_dir;
   if (parse_argument (argc, argv, "-input_dir", input_dir) != -1)
   {
     PCL_INFO ("Input directory given as %s. Batch process mode on.\n", input_dir.c_str ());
@@ -251,7 +250,7 @@ main (int argc, char** argv)
   if (!batch_mode)
   {
     // Parse the command line arguments for .pcd files
-    vector<int> p_file_indices;
+    std::vector<int> p_file_indices;
     p_file_indices = parse_file_extension_argument (argc, argv, ".pcd");
     if (p_file_indices.size () != 2)
     {
@@ -279,9 +278,9 @@ main (int argc, char** argv)
   }
   else
   {
-    if (input_dir != "" && boost::filesystem::exists (input_dir))
+    if (!input_dir.empty() && boost::filesystem::exists (input_dir))
     {
-      vector<string> pcd_files;
+      std::vector<std::string> pcd_files;
       boost::filesystem::directory_iterator end_itr;
       for (boost::filesystem::directory_iterator itr (input_dir); itr != end_itr; ++itr)
       {

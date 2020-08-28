@@ -37,7 +37,7 @@
  *
  */
 
-#include <gtest/gtest.h>
+#include <pcl/test/gtest.h>
 
 #include <pcl/point_types.h>
 #include <pcl/io/pcd_io.h>
@@ -51,7 +51,6 @@
 #include <pcl/surface/texture_mapping.h>
 using namespace pcl;
 using namespace pcl::io;
-using namespace std;
 
 PointCloud<PointXYZ>::Ptr cloud (new PointCloud<PointXYZ>);
 PointCloud<PointNormal>::Ptr cloud_with_normals (new PointCloud<PointNormal>);
@@ -184,7 +183,7 @@ TEST (PCL, UpdateMesh_With_TextureMapping)
     // update with texture mapping
     // set 2 texture for 2 mesh
     std::vector<std::string> tex_files;
-    tex_files.push_back("tex4.jpg");
+    tex_files.emplace_back("tex4.jpg");
 
     // initialize texture mesh
     TextureMesh tex_mesh;
@@ -226,7 +225,7 @@ TEST (PCL, UpdateMesh_With_TextureMapping)
     //tex_material.tex_Ns = 0.0f;
     //tex_material.tex_illum = 2;
 
-    //// set texture material paramaters
+    //// set texture material parameters
     //tm.setTextureMaterials(tex_material);
 
     //// set texture files
